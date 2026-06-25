@@ -110,7 +110,7 @@ const MOVIES = {
     formats: ["Standard", "GOLD", "PXL", "DIRECTORS_CUT"],
     releaseDate: "Jun 19, 2026",
     status: "NOW_SHOWING",
-    posterUrl: "https://originserver-static1-uat.pvrcinemas.com/pvrcms/movie_v/36850_iHMEZiNw.jpg"
+    posterUrl: "https://originserver-static1-uat.pvrcinemas.com/pvrcms/movie_v/36850_UxuBHknq.jpg"
   },
   "35277": {
     filmId: "35277",

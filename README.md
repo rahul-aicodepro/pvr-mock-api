@@ -148,6 +148,71 @@ GET /api/cinema/MU004/shows?date=2026-06-25
 
 ---
 
+## Live PVR Proxy Endpoints
+
+These routes call the scraped PVR APIs from `libs/pvrApiUrls.json` and attach the required headers:
+`city`, `appVersion: 1.0`, `chain: PVR`, `country: INDIA`, `flow: PVRINOX`, `origin: https://www.pvrcinemas.com`, `platform: WEBSITE`, and `Authorization: Bearer`.
+
+All live routes accept either `GET` query params or a `POST` JSON body.
+When a route receives `city` without coordinates, it fills `lat` and `lng` from `libs/pvrCities.json`.
+
+### Local PVR City List
+```
+GET /api/pvr/city-list
+```
+
+### PVR Cities
+```
+GET /api/pvr/cities?city=Delhi&lat=28.6139&lng=77.2090
+GET /api/pvr/cities?city=Delhi
+```
+
+### PVR Cinemas
+```
+GET /api/pvr/cinemas?city=Delhi&lat=&lng=&text=
+GET /api/pvr/cinemas?city=Delhi
+```
+
+### PVR Cinema-Wise Showtimes
+```
+GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-06-26
+GET /api/pvr/showtimes/cinemas?city=Delhi&date=2026-06-26
+```
+
+### PVR Movie-Wise Showtimes
+```
+GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-06-26
+GET /api/pvr/showtimes/movies?city=Delhi&date=2026-06-26
+```
+
+### PVR Cinema Sessions
+```
+GET /api/pvr/cinemas/DL001/sessions?city=Delhi&dated=2026-06-26
+GET /api/pvr/sessions?city=Delhi&cid=DL001&date=2026-06-26
+```
+
+### PVR Offers
+```
+GET /api/pvr/offers?city=Mumbai-All&id=0&payment=false
+POST /api/pvr/offers
+```
+
+### PVR Seat Layout / Availability
+```
+GET /api/pvr/seatlayout?city=Delhi&cid=348&dated=2026-06-27
+GET /api/pvr/seatlayout?city=Delhi&cinemaName=PVR%20Select%20City%20Walk&date=2026-06-27
+POST /api/pvr/seatlayout
+```
+
+This route uses a local PVR-style response template instead of calling PVR, so no `encrypted` token is required.
+By default it fetches real PVR cinema/movie/show metadata from `/csessions` when `city` and `cid` are supplied, then injects that metadata into the local seat template.
+The proxy randomizes seat availability per cinema/date/show seed, with available seats kept in the majority.
+Pass `liveMeta=false` to skip the metadata lookup and use fully local demo metadata.
+
+Each response returns the payload used under `payload` and the response body under `data`.
+
+---
+
 ## Availability Status Values
 
 | Status | Label | Emoji | Bookable |

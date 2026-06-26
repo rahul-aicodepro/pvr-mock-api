@@ -1,0 +1,577 @@
+[
+    {
+        "city": "Agra",
+        "latitude": 27.1767,
+        "longitude": 78.0081
+    },
+    {
+        "city": "Ahmedabad",
+        "latitude": 23.0225,
+        "longitude": 72.5714
+    },
+    {
+        "city": "Ajmer",
+        "latitude": 26.4499,
+        "longitude": 74.6399
+    },
+    {
+        "city": "Amritsar",
+        "latitude": 31.6340,
+        "longitude": 74.8723
+    },
+    {
+        "city": "Anand",
+        "latitude": 22.5645,
+        "longitude": 72.9289
+    },
+    {
+        "city": "Armoor",
+        "latitude": 18.7900,
+        "longitude": 78.2900
+    },
+    {
+        "city": "Aurangabad",
+        "latitude": 19.8762,
+        "longitude": 75.3433
+    },
+    {
+        "city": "Bareilly",
+        "latitude": 28.3670,
+        "longitude": 79.4304
+    },
+    {
+        "city": "Belagavi",
+        "latitude": 15.8497,
+        "longitude": 74.4977
+    },
+    {
+        "city": "Belgaum",
+        "latitude": 15.8497,
+        "longitude": 74.4977
+    },
+    {
+        "city": "Bengaluru",
+        "latitude": 12.9716,
+        "longitude": 77.5946
+    },
+    {
+        "city": "Bhilai",
+        "latitude": 21.1938,
+        "longitude": 81.3509
+    },
+    {
+        "city": "Bhilwara",
+        "latitude": 25.3407,
+        "longitude": 74.6313
+    },
+    {
+        "city": "Bhiwadi",
+        "latitude": 28.2103,
+        "longitude": 76.8638
+    },
+    {
+        "city": "Bhopal",
+        "latitude": 23.2599,
+        "longitude": 77.4126
+    },
+    {
+        "city": "Bhubaneswar",
+        "latitude": 20.2961,
+        "longitude": 85.8245
+    },
+    {
+        "city": "Bilaspur",
+        "latitude": 22.0797,
+        "longitude": 82.1409
+    },
+    {
+        "city": "Bokaro",
+        "latitude": 23.6693,
+        "longitude": 86.1511
+    },
+    {
+        "city": "Burdwan",
+        "latitude": 23.2324,
+        "longitude": 87.8615
+    },
+    {
+        "city": "Chandigarh",
+        "latitude": 30.7333,
+        "longitude": 76.7794
+    },
+    {
+        "city": "Chennai",
+        "latitude": 13.0827,
+        "longitude": 80.2707
+    },
+    {
+        "city": "Coimbatore",
+        "latitude": 11.0168,
+        "longitude": 76.9558
+    },
+    {
+        "city": "Cuddalore",
+        "latitude": 11.7480,
+        "longitude": 79.7714
+    },
+    {
+        "city": "Cuttack",
+        "latitude": 20.4625,
+        "longitude": 85.8830
+    },
+    {
+        "city": "Dehradun",
+        "latitude": 30.3165,
+        "longitude": 78.0322
+    },
+    {
+        "city": "Delhi",
+        "latitude": 28.6139,
+        "longitude": 77.2090
+    },
+    {
+        "city": "Delhi-NCR",
+        "latitude": 28.6139,
+        "longitude": 77.2090
+    },
+    {
+        "city": "Dhanbad",
+        "latitude": 23.7957,
+        "longitude": 86.4304
+    },
+    {
+        "city": "Dharwad",
+        "latitude": 15.4589,
+        "longitude": 75.0078
+    },
+    {
+        "city": "Faridabad",
+        "latitude": 28.4089,
+        "longitude": 77.3178
+    },
+    {
+        "city": "Gandhinagar",
+        "latitude": 23.2156,
+        "longitude": 72.6369
+    },
+    {
+        "city": "Gangtok",
+        "latitude": 27.3389,
+        "longitude": 88.6065
+    },
+    {
+        "city": "Ghaziabad",
+        "latitude": 28.6692,
+        "longitude": 77.4538
+    },
+    {
+        "city": "Goa",
+        "latitude": 15.2993,
+        "longitude": 74.1240
+    },
+    {
+        "city": "Gorakhpur",
+        "latitude": 26.7606,
+        "longitude": 83.3732
+    },
+    {
+        "city": "Greater Noida",
+        "latitude": 28.4744,
+        "longitude": 77.5040
+    },
+    {
+        "city": "Gulbarga",
+        "latitude": 17.3297,
+        "longitude": 76.8343
+    },
+    {
+        "city": "Guntur",
+        "latitude": 16.3067,
+        "longitude": 80.4365
+    },
+    {
+        "city": "Gurugram",
+        "latitude": 28.4595,
+        "longitude": 77.0266
+    },
+    {
+        "city": "Guwahati",
+        "latitude": 26.1445,
+        "longitude": 91.7362
+    },
+    {
+        "city": "Gwalior",
+        "latitude": 26.2183,
+        "longitude": 78.1828
+    },
+    {
+        "city": "Howrah",
+        "latitude": 22.5958,
+        "longitude": 88.2636
+    },
+    {
+        "city": "Hubli",
+        "latitude": 15.3647,
+        "longitude": 75.1240
+    },
+    {
+        "city": "Hyderabad",
+        "latitude": 17.3850,
+        "longitude": 78.4867
+    },
+    {
+        "city": "Indore",
+        "latitude": 22.7196,
+        "longitude": 75.8577
+    },
+    {
+        "city": "Jabalpur",
+        "latitude": 23.1815,
+        "longitude": 79.9864
+    },
+    {
+        "city": "Jaipur",
+        "latitude": 26.9124,
+        "longitude": 75.7873
+    },
+    {
+        "city": "Jalandhar",
+        "latitude": 31.3260,
+        "longitude": 75.5762
+    },
+    {
+        "city": "Jalgaon",
+        "latitude": 21.0077,
+        "longitude": 75.5626
+    },
+    {
+        "city": "Jammu",
+        "latitude": 32.7266,
+        "longitude": 74.8570
+    },
+    {
+        "city": "Jamnagar",
+        "latitude": 22.4707,
+        "longitude": 70.0577
+    },
+    {
+        "city": "Jodhpur",
+        "latitude": 26.2389,
+        "longitude": 73.0243
+    },
+    {
+        "city": "Jorhat",
+        "latitude": 26.7509,
+        "longitude": 94.2037
+    },
+    {
+        "city": "Kakinada",
+        "latitude": 16.9891,
+        "longitude": 82.2475
+    },
+    {
+        "city": "Kalyan",
+        "latitude": 19.2403,
+        "longitude": 73.1305
+    },
+    {
+        "city": "Kanpur",
+        "latitude": 26.4499,
+        "longitude": 80.3319
+    },
+    {
+        "city": "Khanna",
+        "latitude": 30.7042,
+        "longitude": 76.2192
+    },
+    {
+        "city": "Kochi",
+        "latitude": 9.9312,
+        "longitude": 76.2673
+    },
+    {
+        "city": "Kolhapur",
+        "latitude": 16.7050,
+        "longitude": 74.2433
+    },
+    {
+        "city": "Kolkata",
+        "latitude": 22.5726,
+        "longitude": 88.3639
+    },
+    {
+        "city": "Kota",
+        "latitude": 25.2138,
+        "longitude": 75.8648
+    },
+    {
+        "city": "Latur",
+        "latitude": 18.4088,
+        "longitude": 76.5604
+    },
+    {
+        "city": "Leh",
+        "latitude": 34.1526,
+        "longitude": 77.5771
+    },
+    {
+        "city": "Liluah",
+        "latitude": 22.6200,
+        "longitude": 88.3100
+    },
+    {
+        "city": "Lucknow",
+        "latitude": 26.8467,
+        "longitude": 80.9462
+    },
+    {
+        "city": "Ludhiana",
+        "latitude": 30.9010,
+        "longitude": 75.8573
+    },
+    {
+        "city": "Machillipatnam",
+        "latitude": 16.1875,
+        "longitude": 81.1389
+    },
+    {
+        "city": "Madurai",
+        "latitude": 9.9252,
+        "longitude": 78.1198
+    },
+    {
+        "city": "Mangalore",
+        "latitude": 12.9141,
+        "longitude": 74.8560
+    },
+    {
+        "city": "Manipal",
+        "latitude": 13.3525,
+        "longitude": 74.7842
+    },
+    {
+        "city": "Meerut",
+        "latitude": 28.9845,
+        "longitude": 77.7064
+    },
+    {
+        "city": "Mohali",
+        "latitude": 30.7046,
+        "longitude": 76.7179
+    },
+    {
+        "city": "Moradabad",
+        "latitude": 28.8386,
+        "longitude": 78.7733
+    },
+    {
+        "city": "Mumbai",
+        "latitude": 19.0760,
+        "longitude": 72.8777
+    },
+    {
+        "city": "Mumbai-All",
+        "latitude": 19.0760,
+        "longitude": 72.8777
+    },
+    {
+        "city": "Mysuru",
+        "latitude": 12.2958,
+        "longitude": 76.6394
+    },
+    {
+        "city": "Nadiad",
+        "latitude": 22.6916,
+        "longitude": 72.8634
+    },
+    {
+        "city": "Nagpur",
+        "latitude": 21.1458,
+        "longitude": 79.0882
+    },
+    {
+        "city": "Nanded",
+        "latitude": 19.1383,
+        "longitude": 77.3210
+    },
+    {
+        "city": "Narsipatnam",
+        "latitude": 17.6686,
+        "longitude": 82.6144
+    },
+    {
+        "city": "Nashik",
+        "latitude": 19.9975,
+        "longitude": 73.7898
+    },
+    {
+        "city": "Navi Mumbai",
+        "latitude": 19.0330,
+        "longitude": 73.0297
+    },
+    {
+        "city": "Nizamabad",
+        "latitude": 18.6726,
+        "longitude": 78.0941
+    },
+    {
+        "city": "Noida",
+        "latitude": 28.5355,
+        "longitude": 77.3910
+    },
+    {
+        "city": "Panchkula",
+        "latitude": 30.6942,
+        "longitude": 76.8606
+    },
+    {
+        "city": "Panipat",
+        "latitude": 29.3909,
+        "longitude": 76.9635
+    },
+    {
+        "city": "Pathankot",
+        "latitude": 32.2742,
+        "longitude": 75.6520
+    },
+    {
+        "city": "Patiala",
+        "latitude": 30.3398,
+        "longitude": 76.3869
+    },
+    {
+        "city": "Patna",
+        "latitude": 25.5941,
+        "longitude": 85.1376
+    },
+    {
+        "city": "Pondicherry",
+        "latitude": 11.9416,
+        "longitude": 79.8083
+    },
+    {
+        "city": "Prayagraj",
+        "latitude": 25.4358,
+        "longitude": 81.8463
+    },
+    {
+        "city": "Pune",
+        "latitude": 18.5204,
+        "longitude": 73.8567
+    },
+    {
+        "city": "Raipur",
+        "latitude": 21.2514,
+        "longitude": 81.6296
+    },
+    {
+        "city": "Rajkot",
+        "latitude": 22.3039,
+        "longitude": 70.8022
+    },
+    {
+        "city": "Ranchi",
+        "latitude": 23.3441,
+        "longitude": 85.3096
+    },
+    {
+        "city": "Rourkela",
+        "latitude": 22.2604,
+        "longitude": 84.8536
+    },
+    {
+        "city": "Salem",
+        "latitude": 11.6643,
+        "longitude": 78.1460
+    },
+    {
+        "city": "Siliguri",
+        "latitude": 26.7271,
+        "longitude": 88.3953
+    },
+    {
+        "city": "Sri Ganganagar",
+        "latitude": 29.9110,
+        "longitude": 73.8797
+    },
+    {
+        "city": "Srinagar",
+        "latitude": 34.0837,
+        "longitude": 74.7973
+    },
+    {
+        "city": "Surat",
+        "latitude": 21.1702,
+        "longitude": 72.8311
+    },
+    {
+        "city": "Thane",
+        "latitude": 19.2183,
+        "longitude": 72.9781
+    },
+    {
+        "city": "Thrissur",
+        "latitude": 10.5276,
+        "longitude": 76.2144
+    },
+    {
+        "city": "Trivandrum",
+        "latitude": 8.5241,
+        "longitude": 76.9366
+    },
+    {
+        "city": "Tumakuru",
+        "latitude": 13.3409,
+        "longitude": 77.1010
+    },
+    {
+        "city": "Udaipur",
+        "latitude": 24.5854,
+        "longitude": 73.7125
+    },
+    {
+        "city": "Ujjain",
+        "latitude": 23.1765,
+        "longitude": 75.7885
+    },
+    {
+        "city": "Vadodara",
+        "latitude": 22.3072,
+        "longitude": 73.1812
+    },
+    {
+        "city": "Vellore",
+        "latitude": 12.9165,
+        "longitude": 79.1325
+    },
+    {
+        "city": "Vijayawada",
+        "latitude": 16.5062,
+        "longitude": 80.6480
+    },
+    {
+        "city": "Vizag",
+        "latitude": 17.6868,
+        "longitude": 83.2185
+    },
+    {
+        "city": "Vizianagaram",
+        "latitude": 18.1066,
+        "longitude": 83.3956
+    },
+    {
+        "city": "Warangal",
+        "latitude": 17.9689,
+        "longitude": 79.5941
+    },
+    {
+        "city": "Yamunanagar",
+        "latitude": 30.1290,
+        "longitude": 77.2674
+    },
+    {
+        "city": "Zirakpur",
+        "latitude": 30.6440,
+        "longitude": 76.8175
+    }
+]

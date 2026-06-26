@@ -18,6 +18,12 @@ const REQUIRED_HEADERS = {
   flow: 'PVRINOX'
 };
 
+const COOKIE_CACHE_TTL_MS = 5 * 60 * 1000;
+let pvrCookieCache = {
+  value: '',
+  expiresAt: 0
+};
+
 function getRequestValue(req, key, fallback = '') {
   return req.body?.[key] ?? req.query?.[key] ?? fallback;
 }
@@ -83,10 +89,41 @@ function buildCoordinateOverrides(req, payload = {}, options = {}) {
   return includeCity ? { city: city || payload.city, ...coordinates } : coordinates;
 }
 
-function buildHeaders(city, chain = REQUIRED_HEADERS.chain) {
-  const authToken = process.env.PVR_AUTH_TOKEN || '';
+async function getPvrCookieHeader() {
+  if (process.env.PVR_COOKIE) return process.env.PVR_COOKIE;
+  if (pvrCookieCache.value && Date.now() < pvrCookieCache.expiresAt) return pvrCookieCache.value;
 
-  return {
+  try {
+    const response = await fetch('https://www.pvrcinemas.com/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    const setCookie = response.headers.get('set-cookie') || '';
+    const cookieHeader = setCookie
+      .split(/,(?=[^;,]+=)/)
+      .map((cookie) => cookie.split(';')[0].trim())
+      .filter(Boolean)
+      .join('; ');
+
+    pvrCookieCache = {
+      value: cookieHeader,
+      expiresAt: Date.now() + COOKIE_CACHE_TTL_MS
+    };
+
+    return cookieHeader;
+  } catch (error) {
+    return '';
+  }
+}
+
+async function buildHeaders(city, chain = REQUIRED_HEADERS.chain) {
+  const authToken = process.env.PVR_AUTH_TOKEN || '';
+  const cookieHeader = await getPvrCookieHeader();
+
+  const headers = {
     Origin: REQUIRED_HEADERS.origin,
     Referer: 'https://www.pvrcinemas.com/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -104,6 +141,10 @@ function buildHeaders(city, chain = REQUIRED_HEADERS.chain) {
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-site'
   };
+
+  if (cookieHeader) headers.Cookie = cookieHeader;
+
+  return headers;
 }
 
 function buildPayload(defaultPayload, req, overrides = {}) {
@@ -212,7 +253,7 @@ async function callPvrApi({ req, res, config, payload, city, transformResponse }
   try {
     const pvrResponse = await fetch(config.url, {
       method: 'POST',
-      headers: buildHeaders(headerCity, chain),
+      headers: await buildHeaders(headerCity, chain),
       body: JSON.stringify(payload)
     });
 
@@ -265,7 +306,7 @@ async function callPvrApi({ req, res, config, payload, city, transformResponse }
 async function fetchPvrJson(config, payload, city, chain = REQUIRED_HEADERS.chain) {
   const response = await fetch(config.url, {
     method: 'POST',
-    headers: buildHeaders(city, chain),
+    headers: await buildHeaders(city, chain),
     body: JSON.stringify(payload)
   });
   const contentType = response.headers.get('content-type') || '';

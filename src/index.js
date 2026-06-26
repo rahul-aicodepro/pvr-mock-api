@@ -6,9 +6,10 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const apiRoutes = require('./routes/api');
+const pvrLiveRoutes = require('./routes/pvrLive');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(cors());
@@ -17,6 +18,7 @@ app.use(morgan('dev'));
 
 // ── Routes ───────────────────────────────────────────────────
 app.use('/api', apiRoutes);
+app.use('/api/pvr', pvrLiveRoutes);
 
 // ── Root ─────────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -34,7 +36,15 @@ app.get('/', (req, res) => {
       quickAvailability:  "GET /api/availability/quick?movieId=36850&city=delhi&date=2026-06-23",
       formatAvailability: "GET /api/availability/format?movieId=35277&city=delhi&format=IMAX",
       nowShowing:         "GET /api/nowshowing?city=delhi",
-      cinemaShows:        "GET /api/cinema/:cinemaId/shows?date=2026-06-23"
+      cinemaShows:        "GET /api/cinema/:cinemaId/shows?date=2026-06-23",
+      pvrCities:          "GET /api/pvr/cities?city=Delhi&lat=28.6139&lng=77.2090",
+      pvrCityList:        "GET /api/pvr/city-list",
+      pvrCinemas:         "GET /api/pvr/cinemas?city=Delhi",
+      pvrCinemaShowtimes: "GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-06-26",
+      pvrMovieShowtimes:  "GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-06-26",
+      pvrCinemaSessions:  "GET /api/pvr/cinemas/:cinemaId/sessions?city=Delhi&dated=2026-06-26",
+      pvrOffers:          "GET /api/pvr/offers?city=Mumbai-All&id=0&payment=false",
+      pvrSeatLayout:      "GET /api/pvr/seatlayout?city=Delhi&cid=348&dated=2026-06-27"
     },
     availableCities: ["delhi", "mumbai", "bangalore", "chennai", "hyderabad", "pune"],
     sampleMovieIds: {

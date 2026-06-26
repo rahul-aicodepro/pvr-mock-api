@@ -1,3 +1,70 @@
 {
-    
+    "showtimes": {
+        "cshowtimes": {
+            "url": "https://api3.pvrcinemas.com/api/v1/booking/content/cshowtimes",
+            "payload": {
+                "city": "",
+                "lat": "",
+                "lng": "",
+                "dated": "NA",
+                "minDistance": 0
+            }
+        },
+        "mshowtimes": {
+            "url": "https://api3.pvrcinemas.com/api/v1/booking/content/mshowtimes",
+            "payload": {
+                "city": "",
+                "lat": "",
+                "lng": "",
+                "dated": "NA",
+                "minDistance": 0
+            }
+        }
+    },
+    "city": {
+        "url": "https://api3.pvrcinemas.com/api/v1/booking/content/city",
+        "payload": {
+            "lat": "",
+            "lng": ""
+        }
+    },
+    "cinemas": {
+        "url": "https://api3.pvrcinemas.com/api/v1/booking/content/cinemas",
+        "payload": {
+            "city": "",
+            "lat": "",
+            "lng": "",
+            "text": ""
+        }
+    },
+    "csessions": {
+        "url": "https://api3.pvrcinemas.com/api/v1/booking/content/csessions",
+        "payload": {
+            "city": "",
+            "cid": "",
+            "lat": "",
+            "lng": "",
+            "dated": "NA",
+            "qr": "NO",
+            "cineType": "",
+            "cineTypeQR": ""
+        }
+    },
+    "offers": {
+        "url": "https://api3.pvrcinemas.com/api/v1/offer/list",
+        "payload": {
+            "id": 0,
+            "city": "Mumbai-All",
+            "payment": false
+        }
+    },
+    "seatlayout": {
+        "url": "https://api3.pvrcinemas.com/api/v1/booking/ticketing/seatlayout",
+        "payload": {
+            "dated": "",
+            "encrypted": "",
+            "onPage": false,
+            "layoutType": "NEW"
+        }
+    }
 }

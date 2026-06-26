@@ -84,14 +84,25 @@ function buildCoordinateOverrides(req, payload = {}, options = {}) {
 }
 
 function buildHeaders(city, chain = REQUIRED_HEADERS.chain) {
+  const authToken = process.env.PVR_AUTH_TOKEN || '';
+
   return {
-    ...REQUIRED_HEADERS,
-    Authorization: `Bearer ${process.env.PVR_AUTH_TOKEN || ''}`,
+    Origin: REQUIRED_HEADERS.origin,
+    Referer: 'https://www.pvrcinemas.com/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    Accept: 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Content-Type': 'application/json',
     city,
+    appVersion: REQUIRED_HEADERS.appVersion,
     chain,
-    accept: 'application/json, text/plain, */*',
-    'content-type': 'application/json',
-    referer: 'https://www.pvrcinemas.com/'
+    country: REQUIRED_HEADERS.country,
+    flow: REQUIRED_HEADERS.flow,
+    platform: REQUIRED_HEADERS.platform,
+    Authorization: authToken ? `Bearer ${authToken}` : 'Bearer',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-site'
   };
 }
 

@@ -12,7 +12,14 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // ── Middleware ────────────────────────────────────────────────
-app.use(cors());
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'city', 'chain', 'appVersion', 'platform', 'country', 'flow']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
 

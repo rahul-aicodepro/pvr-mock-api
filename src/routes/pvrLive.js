@@ -463,6 +463,168 @@ async function enrichSeatLayoutPayload(req, payload) {
 }
 
 // ============================================================
+// TRANSFORM FUNCTIONS — strip heavy upstream data for LLM use
+// ============================================================
+
+function summarizeMovieShowtimes(responseBody) {
+  const sessions = responseBody?.output?.showTimeSessions;
+  if (!Array.isArray(sessions)) return responseBody;
+
+  return {
+    movies: sessions.map((session) => {
+      const movie = session.movie;
+      return {
+        id: movie.id,
+        name: movie.n,
+        language: movie.otherlanguages,
+        genre: movie.othergenres,
+        certificate: movie.ce,
+        duration: movie.mlength,
+        cinemas: (session.movieCinemaSessions || []).map((cs) => ({
+          id: cs.cinema.theatreId,
+          name: cs.cinema.name,
+          shows: (cs.experienceSessions || []).flatMap((es) =>
+            (es.shows || [])
+              .filter((s) => s.status === 1)
+              .map((s) => ({
+                time: s.showTime,
+                format: es.experience || 'Standard',
+                language: s.language,
+                sessionId: s.sessionId
+              }))
+          )
+        })).filter((c) => c.shows.length > 0)
+      };
+    })
+  };
+}
+
+function summarizeCinemas(responseBody) {
+  const cinemas = responseBody?.output?.c;
+  if (!Array.isArray(cinemas)) return responseBody;
+
+  return {
+    cinemas: cinemas.map((c) => ({
+      id: c.theatreId,
+      name: c.name,
+      address: c.address1,
+      city: c.cityName,
+      lat: c.latitude,
+      lng: c.longitude,
+      amenities: {
+        foodAvailable: c.foodAvailable,
+        handicap: c.handicap,
+        fbDeliveryOnSeat: c.fbDeliveryOnSeat,
+        adFree: c.adFree
+      },
+      alert: c.alertTxt || null,
+      experiences: Object.values(c.screens || {})
+        .map((s) => s.screenType)
+        .filter((v, i, arr) => arr.indexOf(v) === i && v)
+    }))
+  };
+}
+
+function summarizeCinemaSessions(responseBody) {
+  const cinemas = responseBody?.output?.cinemaMovieSessions;
+  if (!Array.isArray(cinemas)) return responseBody;
+
+  return {
+    cinemas: cinemas.map((cs) => {
+      const cinema = cs.cinemaRe || {};
+      const movies = Array.isArray(cs.movieRe) ? cs.movieRe : [cs.movieRe].filter(Boolean);
+
+      return {
+        id: cinema.theatreId,
+        name: cinema.name,
+        address: cinema.address1,
+        movies: movies.map((movie) => ({
+          id: movie.id,
+          name: movie.n,
+          language: movie.otherlanguages,
+          genre: movie.othergenres,
+          certificate: movie.ce,
+          duration: movie.mlength
+        })),
+        shows: (cs.experienceSessions || []).flatMap((es) =>
+          (es.shows || [])
+            .filter((s) => s.status === 1)
+            .map((s) => ({
+              time: s.showTime,
+              format: es.experience || 'Standard',
+              language: s.language,
+              sessionId: s.sessionId,
+              movieId: s.movieId
+            }))
+        )
+      };
+    }).filter((c) => c.shows.length > 0)
+  };
+}
+
+function summarizeSessions(responseBody) {
+  const sessions = responseBody?.output?.cinemaMovieSessions;
+  if (!Array.isArray(sessions)) return responseBody;
+
+  const cinemaRe = responseBody?.output?.cinemaRe || {};
+
+  return {
+    cinema: {
+      id: cinemaRe.theatreId,
+      name: cinemaRe.name,
+      address: cinemaRe.address1,
+      city: cinemaRe.cityName
+    },
+    shows: sessions.flatMap((cs) => {
+      const movies = Array.isArray(cs.movieRe) ? cs.movieRe : [cs.movieRe].filter(Boolean);
+      const movieById = new Map();
+      movies.forEach((m) => {
+        if (m.id) movieById.set(String(m.id), m);
+        (m.filmIds || []).forEach((fid) => movieById.set(String(fid), m));
+      });
+
+      return (cs.experienceSessions || []).flatMap((es) =>
+        (es.shows || [])
+          .filter((s) => s.status === 1)
+          .map((s) => {
+            const movie = movieById.get(String(s.movieId)) || movies[0] || {};
+            return {
+              sessionId: s.sessionId,
+              movieId: s.movieId,
+              movieName: movie.n || movie.filmNameWeb,
+              language: s.language,
+              format: es.experience || 'Standard',
+              time: s.showTime,
+              screen: s.screenName,
+              date: s.showDate
+            };
+          })
+      );
+    })
+  };
+}
+
+function summarizeOffers(responseBody) {
+  const offers = responseBody?.output?.offers;
+  if (!Array.isArray(offers)) return responseBody;
+
+  return {
+    offers: offers.map((o) => ({
+      id: o.id,
+      title: o.vouDesc,
+      bank: o.bank || null,
+      type: o.type || null,
+      category: o.category || null,
+      validFrom: o.validFrom || null,
+      validTo: o.validTo || null,
+      code: o.fixedCode || null,
+      redemptionOutlet: o.redemptionOutlet || null,
+      summary: Array.isArray(o.tnc) && o.tnc.length > 0 ? o.tnc[0] : null
+    }))
+  };
+}
+
+// ============================================================
 // GET/POST /api/pvr/cities?city=Delhi&lat=28.6139&lng=77.2090
 // Fetch city list/nearest city from PVR.
 // ============================================================
@@ -494,7 +656,7 @@ registerGetPost('/cinemas', (req, res) => {
   const config = pvrApiUrls.cinemas;
   const payload = buildPayload(config.payload, req, buildCoordinateOverrides(req, config.payload));
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemas });
 });
 
 // ============================================================
@@ -508,7 +670,7 @@ registerGetPost('/showtimes/cinemas', (req, res) => {
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemaSessions });
 });
 
 // ============================================================
@@ -522,7 +684,7 @@ registerGetPost('/showtimes/movies', (req, res) => {
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeMovieShowtimes });
 });
 
 // ============================================================
@@ -537,7 +699,7 @@ registerGetPost('/cinemas/:cinemaId/sessions', (req, res) => {
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions });
 });
 
 // ============================================================
@@ -558,7 +720,7 @@ registerGetPost('/sessions', (req, res) => {
     });
   }
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions });
 });
 
 // ============================================================
@@ -569,7 +731,7 @@ registerGetPost('/offers', (req, res) => {
   const config = pvrApiUrls.offers;
   const payload = buildPayload(config.payload, req);
 
-  return callPvrApi({ req, res, config, payload });
+  return callPvrApi({ req, res, config, payload,transformResponse:summarizeOffers});
 });
 
 // ============================================================

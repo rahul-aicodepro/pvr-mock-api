@@ -313,6 +313,8 @@ async function fetchPvrJson(config, payload, city, chain = REQUIRED_HEADERS.chai
   const responseBody = contentType.includes('application/json')
     ? await response.json()
     : await response.text();
+  console.log("response::",responseBody);
+  
 
   if (!response.ok) {
     const error = new Error('PVR API request failed');
@@ -467,43 +469,98 @@ async function enrichSeatLayoutPayload(req, payload) {
 // ============================================================
 
 function summarizeMovieShowtimes(responseBody) {
-  const sessions = responseBody?.output?.showTimeSessions;
-  if (!Array.isArray(sessions)) return responseBody;
+  const output = responseBody?.output || responseBody;
+  const sessions = Array.isArray(output?.showTimeSessions)
+    ? output.showTimeSessions
+    : (output?.movie && Array.isArray(output?.movieCinemaSessions) ? [output] : []);
+
+  if (!sessions.length) return responseBody;
+
+  const movies = sessions.map((session) => {
+    const movie = session.movie || {};
+    const cinemas = (session.movieCinemaSessions || []).map((cinemaSession) => {
+      const cinema = cinemaSession.cinema || {};
+      const shows = (cinemaSession.experienceSessions || []).flatMap((experienceSession) =>
+        (experienceSession.shows || [])
+          .filter((show) => show.status === 1)
+          .map((show) => ({
+            sessionId: show.sessionId,
+            movieId: show.movieId,
+            time: show.showTime,
+            date: show.showDate || show.showDateStr,
+            endTime: show.endTime,
+            format: show.movieFormat || show.filmFormat || experienceSession.experience || 'Standard',
+            experience: experienceSession.experience || show.screenType || 'Standard',
+            language: show.language,
+            screenId: show.screenId,
+            screen: show.screenName,
+            status: show.statusTxt,
+            encrypted: show.encrypted
+          }))
+      );
+
+      return {
+        id: cinema.theatreId,
+        name: cinema.name,
+        address: cinema.address1,
+        city: cinema.cityName,
+        lat: cinema.latitude,
+        lng: cinema.longitude,
+        distance: cinema.distanceText,
+        foodAvailable: cinema.foodAvailable,
+        isPosAvailable: cinema.isPosAvailable,
+        showCount: shows.length,
+        shows
+      };
+    }).filter((cinema) => cinema.shows.length > 0);
+
+    return {
+      id: movie.id,
+      name: movie.n || movie.filmNameWeb || movie.filmName,
+      language: movie.otherlanguages,
+      languages: movie.mfs || [],
+      genre: movie.othergenres,
+      genres: movie.grs || [],
+      certificate: movie.ce || movie.certificateLk,
+      duration: movie.mlength,
+      posterUrl: movie.miv || null,
+      bannerUrl: movie.mih || null,
+      trailer: movie.mtrailerurl || null,
+      showCount: cinemas.reduce((sum, cinema) => sum + cinema.showCount, 0),
+      cinemas
+    };
+  }).filter((movie) => movie.cinemas.length > 0);
 
   return {
-    movies: sessions.map((session) => {
-      const movie = session.movie;
-      return {
-        id: movie.id,
-        name: movie.n,
-        language: movie.otherlanguages,
-        genre: movie.othergenres,
-        certificate: movie.ce,
-        duration: movie.mlength,
-        cinemas: (session.movieCinemaSessions || []).map((cs) => ({
-          id: cs.cinema.theatreId,
-          name: cs.cinema.name,
-          shows: (cs.experienceSessions || []).flatMap((es) =>
-            (es.shows || [])
-              .filter((s) => s.status === 1)
-              .map((s) => ({
-                time: s.showTime,
-                format: es.experience || 'Standard',
-                language: s.language,
-                sessionId: s.sessionId
-              }))
-          )
-        })).filter((c) => c.shows.length > 0)
-      };
-    })
+    days: output.days || [],
+    languages: output.languages || [],
+    formats: output.formats || [],
+    experiences: output.experiences || [],
+    movies,
+    recommendedMovies: (output.recommendMovies || []).map((movie) => ({
+      id: movie.id,
+      name: movie.n || movie.filmNameWeb || movie.filmName,
+      language: movie.otherlanguages,
+      genre: movie.othergenres,
+      certificate: movie.ce || movie.certificateLk,
+      duration: movie.mlength,
+      posterUrl: movie.miv || null,
+      bannerUrl: movie.mih || null
+    }))
   };
 }
 
 function summarizeCinemas(responseBody) {
-  const cinemas = responseBody?.output?.c;
+  const output = responseBody?.output || responseBody;
+  const cinemas = output?.c;
   if (!Array.isArray(cinemas)) return responseBody;
 
   return {
+    map: output.map ?? null,
+    defaultMap: output.defaultMap ?? null,
+    message: output.fmsg || output.displayMsg || null,
+    defaultDistance: output.defaultDistance,
+    maxDistance: output.maxDistance,
     cinemas: cinemas.map((c) => ({
       id: c.theatreId,
       name: c.name,
@@ -511,54 +568,117 @@ function summarizeCinemas(responseBody) {
       city: c.cityName,
       lat: c.latitude,
       lng: c.longitude,
+      distance: c.distanceText,
+      showCount: c.showCount || 0,
+      images: {
+        portrait: c.miv || null,
+        landscape: c.mih || null
+      },
       amenities: {
         foodAvailable: c.foodAvailable,
+        isPosAvailable: c.isPosAvailable,
         handicap: c.handicap,
+        handicapRamp: c.handicapRamp,
         fbDeliveryOnSeat: c.fbDeliveryOnSeat,
         adFree: c.adFree
       },
       alert: c.alertTxt || null,
+      screens: Object.values(c.screens || {}).map((screen) => ({
+        id: screen.screenId,
+        name: screen.screenName,
+        type: screen.screenType,
+        handicap: screen.handicap,
+        minSeats: screen.minSeats
+      })),
       experiences: Object.values(c.screens || {})
         .map((s) => s.screenType)
-        .filter((v, i, arr) => arr.indexOf(v) === i && v)
-    }))
+        .filter((v, i, arr) => arr.indexOf(v) === i && v),
+      movies: (c.movieRes || []).map((movie) => ({
+        id: movie.id,
+        name: movie.n || movie.filmNameWeb || movie.filmName,
+        language: movie.otherlanguages,
+        languages: movie.mfs || [],
+        genre: movie.othergenres,
+        genres: movie.grs || [],
+        certificate: movie.ce || movie.certificateLk,
+        duration: movie.mlength,
+        posterUrl: movie.miv || null,
+        bannerUrl: movie.mih || null,
+        trailer: movie.mtrailerurl || null,
+        showCount: movie.showCount || 0,
+        filmIds: movie.filmIds || [],
+        formats: (movie.films || []).map((film) => film.format).filter(Boolean),
+        releaseDate: movie.releaseDate || null
+      }))
+    })).filter((cinema) => cinema.showCount > 0 || cinema.movies.length > 0)
   };
 }
 
 function summarizeCinemaSessions(responseBody) {
-  const cinemas = responseBody?.output?.cinemaMovieSessions;
-  if (!Array.isArray(cinemas)) return responseBody;
+  const sessions = responseBody?.output?.cinemaMovieSessions;
+  if (!Array.isArray(sessions)) return responseBody;
+
+  const cinema = responseBody?.output?.cinemaRe || {};
+  const movies = sessions.map((session) => {
+    const movie = session.movieRe || {};
+    const shows = (session.experienceSessions || []).flatMap((experienceSession) =>
+      (experienceSession.shows || [])
+        .filter((show) => show.status === 1)
+        .map((show) => ({
+          sessionId: show.sessionId,
+          movieId: show.movieId,
+          time: show.showTime,
+          date: show.showDate || show.showDateStr,
+          endTime: show.endTime,
+          format: show.movieFormat || show.filmFormat || experienceSession.experience || 'Standard',
+          experience: experienceSession.experience || show.screenType || 'Standard',
+          language: show.language,
+          screenId: show.screenId,
+          screen: show.screenName,
+          status: show.statusTxt,
+          encrypted: show.encrypted
+        }))
+    );
+
+    return {
+      id: movie.id,
+      name: movie.n || movie.filmNameWeb || movie.filmName,
+      language: movie.otherlanguages,
+      languages: movie.mfs || [],
+      genre: movie.othergenres,
+      genres: movie.grs || [],
+      certificate: movie.ce || movie.certificateLk,
+      duration: movie.mlength,
+      poster: movie.miv,
+      banner: movie.mih,
+      trailer: movie.mtrailerurl,
+      showCount: shows.length,
+      shows
+    };
+  }).filter((movie) => movie.shows.length > 0);
 
   return {
-    cinemas: cinemas.map((cs) => {
-      const cinema = cs.cinemaRe || {};
-      const movies = Array.isArray(cs.movieRe) ? cs.movieRe : [cs.movieRe].filter(Boolean);
-
-      return {
-        id: cinema.theatreId,
-        name: cinema.name,
-        address: cinema.address1,
-        movies: movies.map((movie) => ({
-          id: movie.id,
-          name: movie.n,
-          language: movie.otherlanguages,
-          genre: movie.othergenres,
-          certificate: movie.ce,
-          duration: movie.mlength
-        })),
-        shows: (cs.experienceSessions || []).flatMap((es) =>
-          (es.shows || [])
-            .filter((s) => s.status === 1)
-            .map((s) => ({
-              time: s.showTime,
-              format: es.experience || 'Standard',
-              language: s.language,
-              sessionId: s.sessionId,
-              movieId: s.movieId
-            }))
-        )
-      };
-    }).filter((c) => c.shows.length > 0)
+    cinema: {
+      id: cinema.theatreId,
+      name: cinema.name,
+      address: cinema.address1,
+      city: cinema.cityName,
+      lat: cinema.latitude,
+      lng: cinema.longitude,
+      distance: cinema.distanceText,
+      foodAvailable: cinema.foodAvailable,
+      isPosAvailable: cinema.isPosAvailable,
+      screens: Object.values(cinema.screens || {}).map((screen) => ({
+        id: screen.screenId,
+        name: screen.screenName,
+        type: screen.screenType,
+        handicap: screen.handicap,
+        minSeats: screen.minSeats
+      }))
+    },
+    showCount: responseBody?.output?.showCount ?? movies.reduce((sum, movie) => sum + movie.showCount, 0),
+    days: responseBody?.output?.days || [],
+    movies
   };
 }
 

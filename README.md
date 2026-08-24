@@ -173,16 +173,31 @@ GET /api/pvr/cinemas?city=Delhi&lat=&lng=&text=
 GET /api/pvr/cinemas?city=Delhi
 ```
 
+### PVR Movies (Live Currently Showing Movies)
+```
+GET /api/pvr/movies?city=Delhi
+GET /api/pvr/movies?city=Delhi&language=Hindi
+GET /api/pvr/movies?city=Delhi&genre=Action
+GET /api/pvr/movies?city=Delhi&status=NOW_SHOWING
+GET /api/pvr/movies?city=Delhi&forceRefresh=true
+```
+Returns all currently showing movies in a city fetched directly from the live PVR API, with posters, languages, formats, certificates, duration, and show counts.
+
+### PVR Now Showing in a City (Live)
+```
+GET /api/pvr/nowshowing?city=Delhi
+```
+
 ### PVR Cinema-Wise Showtimes
 ```
-GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-06-26
-GET /api/pvr/showtimes/cinemas?city=Delhi&date=2026-06-26
+GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-08-21
+GET /api/pvr/showtimes/cinemas?city=Delhi&date=2026-08-21
 ```
 
 ### PVR Movie-Wise Showtimes
 ```
-GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-06-26
-GET /api/pvr/showtimes/movies?city=Delhi&date=2026-06-26
+GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-08-21
+GET /api/pvr/showtimes/movies?city=Delhi&date=2026-08-21
 ```
 
 ### PVR Cinema Sessions
@@ -210,6 +225,26 @@ The proxy randomizes seat availability per cinema/date/show seed, with available
 Pass `liveMeta=false` to skip the metadata lookup and use fully local demo metadata.
 
 Each response returns the payload used under `payload` and the response body under `data`.
+
+---
+
+## Persistent Request DB
+
+The live PVR proxy now stores request/response pairs locally under `request-db/v1/`.
+
+- Requests are keyed by `method`, `url`, normalized `payload`, and optionally selected headers.
+- Stored responses never expire or delete automatically.
+- Setting `forceRefresh=true` forces a fresh PVR request and replaces the same stored record.
+- `request-db.config.js` supports these modes:
+  - `request-db` — normal persistent storage mode
+  - `readonly` — only returns stored requests, never fetches new responses
+  - `passthrough` — bypasses storage and always forwards requests to PVR
+- Stats are written to `request-db/v1/stats.json` and endpoint registries are in `request-db/v1/registry/`.
+
+Example:
+```
+GET /api/pvr/cinemas?city=Delhi&forceRefresh=true
+```
 
 ---
 

@@ -5,6 +5,7 @@
 const express = require('express');
 const pvrApiUrls = require('../../libs/pvrApiUrls.json');
 const pvrCities = require('../../libs/pvrCities.json');
+const requestDatabase = require('../lib/requestDatabase');
 const { createSeatLayoutTemplate } = require('../data/seatLayoutTemplate');
 
 const router = express.Router();
@@ -25,11 +26,101 @@ let pvrCookieCache = {
 };
 
 function getRequestValue(req, key, fallback = '') {
-  return req.body?.[key] ?? req.query?.[key] ?? fallback;
+  const lowerKey = key.toLowerCase();
+  return (
+    req.body?.[key] ??
+    req.query?.[key] ??
+    req.body?.[lowerKey] ??
+    req.query?.[lowerKey] ??
+    req.headers?.[lowerKey] ??
+    req.headers?.[key] ??
+    req.headers?.[`x-${lowerKey}`] ??
+    fallback
+  );
 }
 
 function getLngRequestValue(req, fallback = '') {
-  return req.body?.lng ?? req.query?.lng ?? req.body?.long ?? req.query?.long ?? fallback;
+  return (
+    req.body?.lng ??
+    req.query?.lng ??
+    req.body?.long ??
+    req.query?.long ??
+    req.body?.longitude ??
+    req.query?.longitude ??
+    req.headers?.lng ??
+    req.headers?.longitude ??
+    req.headers?.['x-lng'] ??
+    req.headers?.['x-longitude'] ??
+    fallback
+  );
+}
+
+function getLatRequestValue(req, fallback = '') {
+  return (
+    req.body?.lat ??
+    req.query?.lat ??
+    req.body?.latitude ??
+    req.query?.latitude ??
+    req.headers?.lat ??
+    req.headers?.latitude ??
+    req.headers?.['x-lat'] ??
+    req.headers?.['x-latitude'] ??
+    fallback
+  );
+}
+
+function getShowIdRequestValue(req, fallback = '') {
+  const keys = [
+    'showId', 'show_id', 'showid', 'showID', 'show_Id',
+    'sessionId', 'session_id', 'sessionid', 'sessionID', 'session_Id',
+    'sid', 'show', 'session', 'id'
+  ];
+  for (const k of keys) {
+    const val = getRequestValue(req, k, '');
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      return String(val).trim();
+    }
+  }
+  return fallback;
+}
+
+function getFilmNameRequestValue(req, fallback = '') {
+  const keys = [
+    'filmName', 'film_name', 'filmname', 'movie', 'movieName', 'movie_name', 'moviename', 'film', 'title'
+  ];
+  for (const k of keys) {
+    const val = getRequestValue(req, k, '');
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      return String(val).trim();
+    }
+  }
+  return fallback;
+}
+
+function getShowTimeRequestValue(req, fallback = '') {
+  const keys = [
+    'showTime', 'show_time', 'showtime', 'time', 'show_Time', 'timeSlot', 'slot'
+  ];
+  for (const k of keys) {
+    const val = getRequestValue(req, k, '');
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      return String(val).trim();
+    }
+  }
+  return fallback;
+}
+
+function getCidRequestValue(req, fallback = '') {
+  const keys = [
+    'cid', 'cinemaCode', 'cinema_code', 'cinemacode', 'cinemaId', 'cinema_id', 'cinemaid', 'theatreId', 'theatre_id', 'theatreid', 'cinema', 'theatre'
+  ];
+  for (const k of keys) {
+    const val = getRequestValue(req, k, '');
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      return String(val).trim();
+    }
+  }
+  return fallback;
 }
 
 function coercePayloadValue(value, defaultValue) {
@@ -63,6 +154,28 @@ function normalizeCityName(value) {
     .replace(/[\s_-]+/g, '');
 }
 
+function findNearestCity(lat, lng) {
+  const nLat = Number(lat);
+  const nLng = Number(lng);
+  if (Number.isNaN(nLat) || Number.isNaN(nLng) || (nLat === 0 && nLng === 0)) return null;
+
+  let closest = null;
+  let minDistance = Infinity;
+
+  for (const entry of pvrCities) {
+    if (entry.latitude && entry.longitude) {
+      const dLat = entry.latitude - nLat;
+      const dLng = entry.longitude - nLng;
+      const dist = dLat * dLat + dLng * dLng;
+      if (dist < minDistance) {
+        minDistance = dist;
+        closest = entry;
+      }
+    }
+  }
+  return closest;
+}
+
 function findCity(city) {
   const normalizedCity = normalizeCityName(city);
   if (!normalizedCity) return null;
@@ -71,19 +184,43 @@ function findCity(city) {
 }
 
 function getCityFromRequest(req, payload = {}) {
-  return getRequestValue(req, 'city', payload.city || '');
+  const fromReq = (
+    req.body?.city ??
+    req.query?.city ??
+    req.headers?.city ??
+    req.headers?.['x-city'] ??
+    req.headers?.['x-location'] ??
+    req.headers?.location ??
+    payload.city ??
+    ''
+  );
+
+  if (fromReq) return String(fromReq).trim();
+
+  // If no city name provided, attempt reverse geolocation lookup from lat/lng
+  const lat = getLatRequestValue(req, payload.lat || '');
+  const lng = getLngRequestValue(req, payload.lng || '');
+  if (lat && lng) {
+    const nearest = findNearestCity(lat, lng);
+    if (nearest) return nearest.city;
+  }
+
+  return '';
 }
 
 function buildCoordinateOverrides(req, payload = {}, options = {}) {
   const includeCity = options.includeCity !== false;
   const city = getCityFromRequest(req, payload);
   const cityData = findCity(city);
-  const lat = getRequestValue(req, 'lat', '');
+  const lat = getLatRequestValue(req, '');
   const lng = getLngRequestValue(req, '');
 
+  const resolvedLat = lat || (cityData?.latitude ? String(cityData.latitude) : payload.lat);
+  const resolvedLng = lng || (cityData?.longitude ? String(cityData.longitude) : payload.lng);
+
   const coordinates = {
-    lat: normalizeCoordinate(lat || cityData?.latitude || payload.lat),
-    lng: normalizeCoordinate(lng || cityData?.longitude || payload.lng)
+    lat: normalizeCoordinate(resolvedLat),
+    lng: normalizeCoordinate(resolvedLng)
   };
 
   return includeCity ? { city: city || payload.city, ...coordinates } : coordinates;
@@ -239,9 +376,10 @@ function randomizeSeatLayoutAvailability(responseBody, payload) {
   return responseBody;
 }
 
-async function callPvrApi({ req, res, config, payload, city, transformResponse }) {
+async function callPvrApi({ req, res, config, payload, city, endpoint, transformResponse }) {
   const headerCity = city || payload.city || getRequestValue(req, 'city');
   const chain = getRequestValue(req, 'chain', REQUIRED_HEADERS.chain);
+  const forceRefresh = String(getRequestValue(req, 'forceRefresh', 'false')).toLowerCase() === 'true' || req.body?.forceRefresh === true;
 
   if (!headerCity) {
     return res.status(400).json({
@@ -250,10 +388,11 @@ async function callPvrApi({ req, res, config, payload, city, transformResponse }
     });
   }
 
-  try {
+  const headers = await buildHeaders(headerCity, chain);
+  const fetcher = async () => {
     const pvrResponse = await fetch(config.url, {
       method: 'POST',
-      headers: await buildHeaders(headerCity, chain),
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -263,13 +402,27 @@ async function callPvrApi({ req, res, config, payload, city, transformResponse }
       : await pvrResponse.text();
 
     if (!pvrResponse.ok) {
-      return res.status(pvrResponse.status).json({
-        status: 'error',
-        message: 'PVR API request failed',
-        upstreamStatus: pvrResponse.status,
-        upstreamResponse: responseBody
-      });
+      const error = new Error('PVR API request failed');
+      error.status = pvrResponse.status;
+      error.responseBody = responseBody;
+      throw error;
     }
+
+    return responseBody;
+  };
+
+  try {
+    const responseBody = await requestDatabase.execute({
+      endpoint,
+      method: 'POST',
+      url: config.url,
+      payload,
+      headers,
+      fetcher,
+      forceRefresh,
+      hashHeaders: false,
+      apiVersion: 'v1'
+    });
 
     if (responseBody && typeof responseBody === 'object' && responseBody.result === 'error') {
       const statusCode = responseBody.status === 204 || responseBody.code === 12001 ? 404 : 502;
@@ -292,38 +445,59 @@ async function callPvrApi({ req, res, config, payload, city, transformResponse }
       source: 'pvr',
       upstreamUrl: config.url,
       payload,
-      data: transformResponse ? transformResponse(responseBody, payload) : responseBody
+      data: transformResponse ? transformResponse(responseBody, payload, req) : responseBody
     });
   } catch (error) {
-    return res.status(502).json({
+    if (error.status === 404 && requestDatabase) {
+      return res.status(404).json({
+        status: 'error',
+        message: error.message || 'Request not stored'
+      });
+    }
+
+    return res.status(error.status || 502).json({
       status: 'error',
-      message: 'Unable to reach PVR API',
-      detail: error.message
+      message: error.message === 'Request not stored' ? 'Request not stored' : 'Unable to reach PVR API',
+      detail: error.responseBody || error.message
     });
   }
 }
 
-async function fetchPvrJson(config, payload, city, chain = REQUIRED_HEADERS.chain) {
-  const response = await fetch(config.url, {
-    method: 'POST',
-    headers: await buildHeaders(city, chain),
-    body: JSON.stringify(payload)
-  });
-  const contentType = response.headers.get('content-type') || '';
-  const responseBody = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
-  console.log("response::",responseBody);
+async function fetchPvrJson(config, payload, city, endpoint, chain = REQUIRED_HEADERS.chain) {
+  const headers = await buildHeaders(city, chain);
+  const fetcher = async () => {
+    const response = await fetch(config.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const responseBody = contentType.includes('application/json')
+      ? await response.json()
+      : await response.text();
   
 
-  if (!response.ok) {
-    const error = new Error('PVR API request failed');
-    error.status = response.status;
-    error.responseBody = responseBody;
-    throw error;
-  }
+    if (!response.ok) {
+      const error = new Error('PVR API request failed');
+      error.status = response.status;
+      error.responseBody = responseBody;
+      throw error;
+    }
 
-  return responseBody;
+    return responseBody;
+  };
+
+  return requestDatabase.execute({
+    endpoint,
+    method: 'POST',
+    url: config.url,
+    payload,
+    headers,
+    fetcher,
+    forceRefresh: false,
+    hashHeaders: false,
+    apiVersion: 'v1'
+  });
 }
 
 function flattenCinemaShows(sessionOutput) {
@@ -360,105 +534,250 @@ function flattenCinemaShows(sessionOutput) {
 }
 
 function pickShowForSeatLayout(showEntries, payload) {
-  if (!showEntries.length) return null;
+  if (!Array.isArray(showEntries) || !showEntries.length) return null;
 
-  const requestedShowId = payload.showId ? String(payload.showId) : '';
+  const requestedShowId = payload.showId ? String(payload.showId) : (payload.sessionId ? String(payload.sessionId) : '');
   const requestedFilmId = payload.filmId ? String(payload.filmId) : '';
-  const requestedShowTime = payload.showTime ? String(payload.showTime).toLowerCase() : '';
-  const requestedExperience = payload.experience ? String(payload.experience).toLowerCase() : '';
+  const requestedFilmName = payload.filmName ? String(payload.filmName).toLowerCase().trim() : '';
+  const requestedShowTime = payload.showTime ? String(payload.showTime).toLowerCase().trim() : '';
+  const requestedExperience = payload.experience ? String(payload.experience).toLowerCase().trim() : '';
 
-  return showEntries.find(({ show, movie, experienceSession }) => (
-    (requestedShowId && (String(show.showId) === requestedShowId || String(show.sessionId) === requestedShowId))
-    || (requestedFilmId && (String(show.movieId) === requestedFilmId || String(movie.id) === requestedFilmId))
-    || (requestedShowTime && String(show.showTime || '').toLowerCase() === requestedShowTime)
-    || (requestedExperience && String(experienceSession.experience || '').toLowerCase() === requestedExperience)
-  )) || showEntries.find(({ show }) => show.status === 1) || showEntries[0];
+  function normalize(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // 1. If showId is requested, STRICTLY match by showId / sessionId. Do NOT fall back to other shows!
+  if (requestedShowId) {
+    return showEntries.find(({ show }) =>
+      String(show.showId) === requestedShowId ||
+      String(show.sessionId) === requestedShowId ||
+      String(show.id) === requestedShowId
+    ) || null;
+  }
+
+  // 2. If film and showTime are requested
+  if ((requestedFilmId || requestedFilmName) && requestedShowTime) {
+    const match = showEntries.find(({ show, movie }) => {
+      const matchFilm = (requestedFilmId && (String(show.movieId) === requestedFilmId || String(movie.id) === requestedFilmId)) ||
+        (requestedFilmName && (normalize(movie.name || movie.n || movie.filmNameWeb).includes(normalize(requestedFilmName)) || normalize(requestedFilmName).includes(normalize(movie.name || movie.n || movie.filmNameWeb))));
+      const matchTime = String(show.showTime || show.time || '').toLowerCase().trim().includes(requestedShowTime);
+      return matchFilm && matchTime;
+    });
+    if (match) return match;
+  }
+
+  // 3. Match by film
+  if (requestedFilmId || requestedFilmName) {
+    const match = showEntries.find(({ show, movie }) =>
+      (requestedFilmId && (String(show.movieId) === requestedFilmId || String(movie.id) === requestedFilmId)) ||
+      (requestedFilmName && (normalize(movie.name || movie.n || movie.filmNameWeb).includes(normalize(requestedFilmName)) || normalize(requestedFilmName).includes(normalize(movie.name || movie.n || movie.filmNameWeb))))
+    );
+    if (match) return match;
+  }
+
+  // 4. Match by showTime
+  if (requestedShowTime) {
+    const match = showEntries.find(({ show }) =>
+      String(show.showTime || show.time || '').toLowerCase().trim().includes(requestedShowTime)
+    );
+    if (match) return match;
+  }
+
+  // 5. Match by experience format
+  if (requestedExperience) {
+    const match = showEntries.find(({ show, experienceSession }) =>
+      String(experienceSession?.experience || '').toLowerCase().trim() === requestedExperience ||
+      String(show.filmFormat || show.experience || show.format || '').toLowerCase().trim() === requestedExperience
+    );
+    if (match) return match;
+  }
+
+  // 6. If no showId, film, time, or format requested at all, return null. Never arbitrarily pick a random show!
+  return null;
 }
 
 function buildSeatTemplateOverridesFromShow(entry, fallbackPayload) {
-  if (!entry) return fallbackPayload;
+  if (!entry) return null;
 
   const { cinema, movie, experienceSession, show } = entry;
-  const showDate = fallbackPayload.dated || new Date().toISOString().split('T')[0];
-  const showTime = show.showTimeStamp
+  const showDate = show.showDate || show.date || fallbackPayload.dated || new Date().toISOString().split('T')[0];
+  const showTimeStr = show.showTime || show.time || fallbackPayload.showTime || '19:30';
+  const showIdVal = String(show.sessionId || show.showId || show.id || fallbackPayload.showId || '');
+  const filmNameVal = movie.name || movie.n || movie.filmNameWeb || movie.filmName || fallbackPayload.filmName || '';
+  const filmIdVal = String(show.movieId || movie.id || fallbackPayload.filmId || '');
+  const cinemaNameVal = cinema.name || fallbackPayload.cinemaName || 'PVR Cinema';
+  const cinemaIdVal = String(cinema.id || cinema.theatreId || fallbackPayload.cid || '');
+
+  const showTimeFormatted = show.showTimeStamp
     ? new Date(show.showTimeStamp).toISOString().replace('T', ' ').slice(0, 19)
-    : `${showDate} ${show.showTime || '19:30'}:00`;
+    : `${showDate} ${showTimeStr.length <= 5 ? `${showTimeStr}:00` : showTimeStr}`;
 
   return {
     ...fallbackPayload,
-    cid: cinema.theatreId || fallbackPayload.cid,
-    cinemaCode: cinema.theatreId || fallbackPayload.cinemaCode,
-    cinemaName: cinema.name || fallbackPayload.cinemaName,
-    filmId: show.movieId || movie.id || fallbackPayload.filmId,
-    filmName: movie.n || movie.filmNameWeb || movie.filmName || fallbackPayload.filmName,
-    showId: show.showId || show.sessionId || fallbackPayload.showId,
-    showTime,
-    showDateTime: `${showDate}, ${show.showTime || fallbackPayload.showTime || '7:30 PM'}`,
+    cid: cinemaIdVal,
+    cinemaCode: cinemaIdVal,
+    cinemaName: cinemaNameVal,
+    filmId: filmIdVal,
+    filmName: filmNameVal,
+    showId: showIdVal,
+    sessionId: showIdVal,
+    showTime: showTimeStr,
+    showDateTime: `${showDate}, ${showTimeStr}`,
+    dated: showDate,
     endTime: show.endTimeStamp
       ? new Date(show.endTimeStamp).toISOString().replace('T', ' ').slice(0, 19)
-      : fallbackPayload.endTime,
-    experience: experienceSession.experience || show.filmFormat || fallbackPayload.experience,
-    language: show.language || movie.otherlanguages || fallbackPayload.language,
-    certificate: movie.ce || movie.certificate || fallbackPayload.certificate,
-    genre: movie.othergenres || fallbackPayload.genre,
-    runningTime: movie.mlength || fallbackPayload.runningTime,
-    seed: fallbackPayload.seed || show.encrypted || show.showId || `${cinema.theatreId}:${show.movieId}:${show.showTime}`
+      : (show.endTime || fallbackPayload.endTime || ''),
+    experience: experienceSession?.experience || show.experience || show.format || show.filmFormat || fallbackPayload.experience || 'Standard',
+    language: show.language || movie.otherlanguages || movie.language || fallbackPayload.language || 'English',
+    certificate: movie.ce || movie.certificate || fallbackPayload.certificate || 'UA',
+    genre: movie.othergenres || movie.genre || fallbackPayload.genre || 'Action',
+    runningTime: movie.mlength || fallbackPayload.runningTime || 120,
+    seed: fallbackPayload.seed || show.encrypted || showIdVal || `${cinemaIdVal}:${filmIdVal}:${showTimeStr}`
   };
 }
 
-function findCinemaInCinemaList(cinemaResponse, cid) {
-  const cinemas = cinemaResponse?.output?.c;
-  if (!Array.isArray(cinemas)) return null;
+function findCinemaInCinemaList(cinemas, cidOrName) {
+  if (!Array.isArray(cinemas) || !cidOrName) return null;
 
-  return cinemas.find((cinema) => String(cinema.theatreId) === String(cid)) || null;
+  function normalize(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  const target = normalize(cidOrName);
+
+  return cinemas.find((c) =>
+    String(c.theatreId) === String(cidOrName) ||
+    String(c.id) === String(cidOrName) ||
+    (c.theatreCode && String(c.theatreCode) === String(cidOrName)) ||
+    normalize(c.name) === target ||
+    normalize(c.name).includes(target) ||
+    target.includes(normalize(c.name))
+  ) || null;
 }
 
 async function enrichSeatLayoutPayload(req, payload) {
-  if (getRequestValue(req, 'liveMeta', 'true') === 'false') return payload;
+  const city = payload.city || getCityFromRequest(req, payload) || 'Delhi';
+  const rawCid = payload.cid || payload.cinemaCode || getRequestValue(req, 'cinema', '');
+  const dated = normalizeDate(payload.dated || getRequestValue(req, 'dated', getRequestValue(req, 'date', new Date().toISOString().split('T')[0])));
+  const requestedShowId = payload.showId ? String(payload.showId) : (payload.sessionId ? String(payload.sessionId) : '');
 
-  const city = payload.city || getRequestValue(req, 'city', 'Delhi');
-  const sessionPayload = buildPayload(pvrApiUrls.csessions.payload, req, {
-    ...buildCoordinateOverrides(req, pvrApiUrls.csessions.payload),
-    cid: payload.cid,
-    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', payload.dated || 'NA')))
-  });
+  function normalize(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
 
-  if (!sessionPayload.cid) return payload;
+  // 1. Fetch cinema list for the city to resolve cinema ID and metadata
+  let resolvedCinema = null;
+  let cinemaList = [];
 
-  let cinemaFromList = null;
   try {
     const cinemasPayload = buildPayload(pvrApiUrls.cinemas.payload, req, buildCoordinateOverrides(req, pvrApiUrls.cinemas.payload));
     const cinemasResponse = await fetchPvrJson(
       pvrApiUrls.cinemas,
       cinemasPayload,
       city,
+      'cinemas',
       getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
     );
-    cinemaFromList = findCinemaInCinemaList(cinemasResponse, sessionPayload.cid);
+    cinemaList = cinemasResponse?.output?.c || [];
+
+    if (rawCid) {
+      resolvedCinema = findCinemaInCinemaList(cinemaList, rawCid);
+    }
   } catch (error) {
-    cinemaFromList = null;
+    cinemaList = [];
+    resolvedCinema = null;
   }
 
-  const responseBody = await fetchPvrJson(
-    pvrApiUrls.csessions,
-    sessionPayload,
+  const numericCid = resolvedCinema ? String(resolvedCinema.theatreId) : (rawCid && /^\d+$/.test(String(rawCid)) ? String(rawCid) : null);
+
+  let matchedShowEntry = null;
+
+  // 2. If we have a numeric cid, fetch csessions for this cinema
+  if (numericCid) {
+    try {
+      const sessionPayload = buildPayload(pvrApiUrls.csessions.payload, req, {
+        ...buildCoordinateOverrides(req, pvrApiUrls.csessions.payload),
+        cid: numericCid,
+        dated
+      });
+
+      const responseBody = await fetchPvrJson(
+        pvrApiUrls.csessions,
+        sessionPayload,
+        city,
+        'csessions',
+        getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
+      );
+
+      if (responseBody && responseBody.result === 'success') {
+        const showEntries = flattenCinemaShows(responseBody.output);
+        matchedShowEntry = pickShowForSeatLayout(showEntries, payload);
+      }
+    } catch (err) {
+      matchedShowEntry = null;
+    }
+  }
+
+  // 3. If show not found yet, search across city showtimes (cshowtimes)
+  if (!matchedShowEntry && (requestedShowId || payload.filmId || payload.filmName || rawCid)) {
+    try {
+      const cshowtimesPayload = buildPayload(pvrApiUrls.cshowtimes.payload, req, {
+        ...buildCoordinateOverrides(req, pvrApiUrls.cshowtimes.payload),
+        city,
+        dated
+      });
+
+      const cshowtimesResp = await fetchPvrJson(
+        pvrApiUrls.cshowtimes,
+        cshowtimesPayload,
+        city,
+        'cshowtimes',
+        getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
+      );
+
+      if (cshowtimesResp && cshowtimesResp.result === 'success') {
+        const flattened = flattenCinemaShows(cshowtimesResp.output);
+        const candidateEntries = numericCid
+          ? flattened.filter((e) => String(e.cinema?.theatreId) === String(numericCid))
+          : (resolvedCinema ? flattened.filter((e) => normalize(e.cinema?.name).includes(normalize(resolvedCinema.name))) : flattened);
+
+        matchedShowEntry = pickShowForSeatLayout(candidateEntries.length ? candidateEntries : flattened, payload);
+
+        // If matched from city showtimes, set resolvedCinema if not set
+        if (matchedShowEntry && !resolvedCinema && matchedShowEntry.cinema) {
+          resolvedCinema = matchedShowEntry.cinema;
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  // 4. If a specific showId was requested and STILL not found, DO NOT pick a random show! Return null!
+  if (requestedShowId) {
+    if (!matchedShowEntry || (String(matchedShowEntry.show?.showId) !== requestedShowId && String(matchedShowEntry.show?.sessionId) !== requestedShowId)) {
+      return null;
+    }
+  }
+
+  // If no show was found at all:
+  if (!matchedShowEntry) {
+    return null;
+  }
+
+  // 5. Build enriched payload from the matched show
+  const enrichedPayload = buildSeatTemplateOverridesFromShow(matchedShowEntry, {
+    ...payload,
     city,
-    getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
-  );
+    dated
+  });
 
-  if (!responseBody || responseBody.result !== 'success') return payload;
-
-  const enrichedPayload = buildSeatTemplateOverridesFromShow(
-    pickShowForSeatLayout(flattenCinemaShows(responseBody.output), payload),
-    payload
-  );
-
-  if (cinemaFromList) {
-    enrichedPayload.cinemaName = cinemaFromList.name || enrichedPayload.cinemaName;
-    enrichedPayload.cinemaCode = cinemaFromList.theatreId || enrichedPayload.cinemaCode;
-    enrichedPayload.cid = cinemaFromList.theatreId || enrichedPayload.cid;
-    enrichedPayload.lat = cinemaFromList.latitude || enrichedPayload.lat;
-    enrichedPayload.lng = cinemaFromList.longitude || enrichedPayload.lng;
+  if (resolvedCinema) {
+    enrichedPayload.cinemaName = resolvedCinema.name || enrichedPayload.cinemaName;
+    enrichedPayload.cinemaCode = String(resolvedCinema.theatreId || resolvedCinema.id || enrichedPayload.cinemaCode);
+    enrichedPayload.cid = String(resolvedCinema.theatreId || resolvedCinema.id || enrichedPayload.cid);
+    enrichedPayload.lat = resolvedCinema.latitude || resolvedCinema.lat || enrichedPayload.lat;
+    enrichedPayload.lng = resolvedCinema.longitude || resolvedCinema.lng || enrichedPayload.lng;
   }
 
   return enrichedPayload;
@@ -467,6 +786,26 @@ async function enrichSeatLayoutPayload(req, payload) {
 // ============================================================
 // TRANSFORM FUNCTIONS — strip heavy upstream data for LLM use
 // ============================================================
+
+function normalizeCinemaCoordinates(latRaw, lngRaw) {
+  const latNum = latRaw !== undefined && latRaw !== null && latRaw !== '' ? Number(latRaw) : null;
+  const lngNum = lngRaw !== undefined && lngRaw !== null && lngRaw !== '' ? Number(lngRaw) : null;
+  const isValidLat = latNum !== null && !Number.isNaN(latNum);
+  const isValidLng = lngNum !== null && !Number.isNaN(lngNum);
+
+  return {
+    lat: isValidLat ? String(latNum) : (latRaw ? String(latRaw) : null),
+    lng: isValidLng ? String(lngNum) : (lngRaw ? String(lngRaw) : null),
+    latitude: isValidLat ? latNum : (latRaw ? String(latRaw) : null),
+    longitude: isValidLng ? lngNum : (lngRaw ? String(lngRaw) : null),
+    coordinates: isValidLat && isValidLng ? {
+      lat: latNum,
+      lng: lngNum,
+      latitude: latNum,
+      longitude: lngNum
+    } : null
+  };
+}
 
 function summarizeMovieShowtimes(responseBody) {
   const output = responseBody?.output || responseBody;
@@ -480,6 +819,7 @@ function summarizeMovieShowtimes(responseBody) {
     const movie = session.movie || {};
     const cinemas = (session.movieCinemaSessions || []).map((cinemaSession) => {
       const cinema = cinemaSession.cinema || {};
+      const coords = normalizeCinemaCoordinates(cinema.latitude, cinema.longitude);
       const shows = (cinemaSession.experienceSessions || []).flatMap((experienceSession) =>
         (experienceSession.shows || [])
           .filter((show) => show.status === 1)
@@ -504,8 +844,11 @@ function summarizeMovieShowtimes(responseBody) {
         name: cinema.name,
         address: cinema.address1,
         city: cinema.cityName,
-        lat: cinema.latitude,
-        lng: cinema.longitude,
+        lat: coords.lat,
+        lng: coords.lng,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        coordinates: coords.coordinates,
         distance: cinema.distanceText,
         foodAvailable: cinema.foodAvailable,
         isPosAvailable: cinema.isPosAvailable,
@@ -550,6 +893,89 @@ function summarizeMovieShowtimes(responseBody) {
   };
 }
 
+function summarizeLiveMovieList(responseBody, payload, req) {
+  const output = responseBody?.output || responseBody;
+  const sessions = Array.isArray(output?.showTimeSessions)
+    ? output.showTimeSessions
+    : (output?.movie && Array.isArray(output?.movieCinemaSessions) ? [output] : []);
+
+  const languageFilter = getRequestValue(req, 'language', '').toLowerCase();
+  const genreFilter = getRequestValue(req, 'genre', '').toLowerCase();
+  const formatFilter = getRequestValue(req, 'format', '').toLowerCase();
+  const statusFilter = getRequestValue(req, 'status', '').toUpperCase();
+
+  let movies = sessions.map((session) => {
+    const movie = session.movie || {};
+    const cinemas = (session.movieCinemaSessions || []).map((cs) => {
+      const shows = (cs.experienceSessions || []).flatMap((es) => (es.shows || []).filter((s) => s.status === 1));
+      return { cinemaId: cs.cinema?.theatreId, cinemaName: cs.cinema?.name, showCount: shows.length };
+    }).filter((c) => c.showCount > 0);
+
+    const allFormats = (session.movieCinemaSessions || []).flatMap((cs) =>
+      (cs.experienceSessions || []).map((es) => es.experience || 'Standard')
+    ).filter((v, i, a) => a.indexOf(v) === i && v);
+
+    const genres = movie.grs || (movie.othergenres ? movie.othergenres.split(',').map((s) => s.trim()) : []);
+    const languages = movie.mfs || (movie.otherlanguages ? movie.otherlanguages.split(',').map((s) => s.trim()) : []);
+    const formats = allFormats.length > 0 ? allFormats : (output.formats || ['Standard']);
+
+    return {
+      filmId: String(movie.id || movie.filmId || ''),
+      name: movie.n || movie.filmNameWeb || movie.filmName || '',
+      certification: movie.ce || movie.certificateLk || '',
+      duration: movie.mlength || '',
+      genres,
+      languages,
+      formats,
+      releaseDate: movie.releaseDate || null,
+      status: 'NOW_SHOWING',
+      posterUrl: movie.miv || null,
+      bannerUrl: movie.mih || null,
+      trailerUrl: movie.mtrailerurl || null,
+      totalShows: cinemas.reduce((sum, c) => sum + c.showCount, 0),
+      cinemasShowingCount: cinemas.length
+    };
+  }).filter((m) => Boolean(m.name));
+
+  if (languageFilter) {
+    movies = movies.filter((m) => m.languages.some((l) => l.toLowerCase().includes(languageFilter)));
+  }
+  if (genreFilter) {
+    movies = movies.filter((m) => m.genres.some((g) => g.toLowerCase().includes(genreFilter)));
+  }
+  if (formatFilter) {
+    movies = movies.filter((m) => m.formats.some((f) => f.toLowerCase().includes(formatFilter)));
+  }
+
+  const upcomingMovies = (output.recommendMovies || []).map((movie) => ({
+    filmId: String(movie.id || ''),
+    name: movie.n || movie.filmNameWeb || movie.filmName || '',
+    languages: movie.otherlanguages ? movie.otherlanguages.split(',').map((s) => s.trim()) : [],
+    genres: movie.othergenres ? movie.othergenres.split(',').map((s) => s.trim()) : [],
+    certification: movie.ce || movie.certificateLk || '',
+    duration: movie.mlength || '',
+    posterUrl: movie.miv || null,
+    bannerUrl: movie.mih || null,
+    status: 'UPCOMING'
+  }));
+
+  let finalMovies = movies;
+  if (statusFilter === 'UPCOMING') {
+    finalMovies = upcomingMovies;
+  } else if (statusFilter === 'ALL') {
+    finalMovies = [...movies, ...upcomingMovies];
+  }
+
+  return {
+    city: payload?.city || '',
+    date: payload?.dated || 'NA',
+    count: finalMovies.length,
+    movies: finalMovies,
+    upcomingCount: upcomingMovies.length,
+    upcomingMovies: statusFilter === 'NOW_SHOWING' ? undefined : upcomingMovies
+  };
+}
+
 function summarizeCinemas(responseBody) {
   const output = responseBody?.output || responseBody;
   const cinemas = output?.c;
@@ -561,39 +987,101 @@ function summarizeCinemas(responseBody) {
     message: output.fmsg || output.displayMsg || null,
     defaultDistance: output.defaultDistance,
     maxDistance: output.maxDistance,
-    cinemas: cinemas.map((c) => ({
-      id: c.theatreId,
-      name: c.name,
-      address: c.address1,
-      city: c.cityName,
-      lat: c.latitude,
-      lng: c.longitude,
-      distance: c.distanceText,
-      showCount: c.showCount || 0,
-      images: {
-        portrait: c.miv || null,
-        landscape: c.mih || null
-      },
-      amenities: {
-        foodAvailable: c.foodAvailable,
-        isPosAvailable: c.isPosAvailable,
-        handicap: c.handicap,
-        handicapRamp: c.handicapRamp,
-        fbDeliveryOnSeat: c.fbDeliveryOnSeat,
-        adFree: c.adFree
-      },
-      alert: c.alertTxt || null,
-      screens: Object.values(c.screens || {}).map((screen) => ({
-        id: screen.screenId,
-        name: screen.screenName,
-        type: screen.screenType,
-        handicap: screen.handicap,
-        minSeats: screen.minSeats
-      })),
-      experiences: Object.values(c.screens || {})
-        .map((s) => s.screenType)
-        .filter((v, i, arr) => arr.indexOf(v) === i && v),
-      movies: (c.movieRes || []).map((movie) => ({
+    count: cinemas.length,
+    cinemas: cinemas.map((c) => {
+      const coords = normalizeCinemaCoordinates(c.latitude, c.longitude);
+      return {
+        id: c.theatreId,
+        theatreId: c.theatreId,
+        name: c.name,
+        address: c.address1,
+        city: c.cityName,
+        pincode: c.pincode || null,
+        lat: coords.lat,
+        lng: coords.lng,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        coordinates: coords.coordinates,
+        distance: c.distanceText,
+        showCount: c.showCount || 0,
+        images: {
+          portrait: c.miv || null,
+          landscape: c.mih || null
+        },
+        amenities: {
+          foodAvailable: c.foodAvailable,
+          isPosAvailable: c.isPosAvailable,
+          handicap: c.handicap,
+          handicapRamp: c.handicapRamp,
+          fbDeliveryOnSeat: c.fbDeliveryOnSeat,
+          adFree: c.adFree
+        },
+        alert: c.alertTxt || null,
+        screens: Object.values(c.screens || {}).map((screen) => ({
+          id: screen.screenId,
+          name: screen.screenName,
+          type: screen.screenType,
+          handicap: screen.handicap,
+          minSeats: screen.minSeats
+        })),
+        experiences: Object.values(c.screens || {})
+          .map((s) => s.screenType)
+          .filter((v, i, arr) => arr.indexOf(v) === i && v),
+        movies: (c.movieRes || []).map((movie) => ({
+          id: movie.id,
+          name: movie.n || movie.filmNameWeb || movie.filmName,
+          language: movie.otherlanguages,
+          languages: movie.mfs || [],
+          genre: movie.othergenres,
+          genres: movie.grs || [],
+          certificate: movie.ce || movie.certificateLk,
+          duration: movie.mlength,
+          posterUrl: movie.miv || null,
+          bannerUrl: movie.mih || null,
+          trailer: movie.mtrailerurl || null,
+          showCount: movie.showCount || 0,
+          filmIds: movie.filmIds || [],
+          formats: (movie.films || []).map((film) => film.format).filter(Boolean),
+          releaseDate: movie.releaseDate || null
+        }))
+      };
+    })
+  };
+}
+
+function summarizeCinemaWiseShowtimes(responseBody) {
+  const output = responseBody?.output || responseBody;
+  const sessions = Array.isArray(output?.showTimeSessions)
+    ? output.showTimeSessions
+    : (output?.cinemaRe && Array.isArray(output?.cinemaMovieSessions) ? [output] : []);
+
+  if (!sessions.length) return responseBody;
+
+  const cinemas = sessions.map((session) => {
+    const cinema = session.cinemaRe || session.cinema || {};
+    const coords = normalizeCinemaCoordinates(cinema.latitude, cinema.longitude);
+    const movieSessions = session.cinemaMovieSessions || [];
+    const movies = movieSessions.map((ms) => {
+      const movie = ms.movieRe || {};
+      const shows = (ms.experienceSessions || []).flatMap((es) =>
+        (es.shows || [])
+          .filter((s) => s.status === 1)
+          .map((s) => ({
+            sessionId: s.sessionId,
+            movieId: s.movieId,
+            time: s.showTime,
+            date: s.showDate || s.showDateStr,
+            endTime: s.endTime,
+            format: s.movieFormat || s.filmFormat || es.experience || 'Standard',
+            experience: es.experience || s.screenType || 'Standard',
+            language: s.language,
+            screenId: s.screenId,
+            screen: s.screenName,
+            status: s.statusTxt,
+            encrypted: s.encrypted
+          }))
+      );
+      return {
         id: movie.id,
         name: movie.n || movie.filmNameWeb || movie.filmName,
         language: movie.otherlanguages,
@@ -602,15 +1090,34 @@ function summarizeCinemas(responseBody) {
         genres: movie.grs || [],
         certificate: movie.ce || movie.certificateLk,
         duration: movie.mlength,
-        posterUrl: movie.miv || null,
-        bannerUrl: movie.mih || null,
-        trailer: movie.mtrailerurl || null,
-        showCount: movie.showCount || 0,
-        filmIds: movie.filmIds || [],
-        formats: (movie.films || []).map((film) => film.format).filter(Boolean),
-        releaseDate: movie.releaseDate || null
-      }))
-    })).filter((cinema) => cinema.showCount > 0 || cinema.movies.length > 0)
+        poster: movie.miv,
+        banner: movie.mih,
+        showCount: shows.length,
+        shows
+      };
+    }).filter((m) => m.shows.length > 0);
+
+    return {
+      id: cinema.theatreId,
+      name: cinema.name,
+      address: cinema.address1,
+      city: cinema.cityName,
+      lat: coords.lat,
+      lng: coords.lng,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      coordinates: coords.coordinates,
+      distance: cinema.distanceText,
+      foodAvailable: cinema.foodAvailable,
+      isPosAvailable: cinema.isPosAvailable,
+      showCount: movies.reduce((sum, m) => sum + m.showCount, 0),
+      movies
+    };
+  }).filter((c) => c.movies.length > 0);
+
+  return {
+    days: output.days || [],
+    cinemas
   };
 }
 
@@ -619,6 +1126,7 @@ function summarizeCinemaSessions(responseBody) {
   if (!Array.isArray(sessions)) return responseBody;
 
   const cinema = responseBody?.output?.cinemaRe || {};
+  const coords = normalizeCinemaCoordinates(cinema.latitude, cinema.longitude);
   const movies = sessions.map((session) => {
     const movie = session.movieRe || {};
     const shows = (session.experienceSessions || []).flatMap((experienceSession) =>
@@ -663,8 +1171,11 @@ function summarizeCinemaSessions(responseBody) {
       name: cinema.name,
       address: cinema.address1,
       city: cinema.cityName,
-      lat: cinema.latitude,
-      lng: cinema.longitude,
+      lat: coords.lat,
+      lng: coords.lng,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      coordinates: coords.coordinates,
       distance: cinema.distanceText,
       foodAvailable: cinema.foodAvailable,
       isPosAvailable: cinema.isPosAvailable,
@@ -682,18 +1193,28 @@ function summarizeCinemaSessions(responseBody) {
   };
 }
 
-function summarizeSessions(responseBody) {
+function summarizeSessions(responseBody, payload = {}) {
   const sessions = responseBody?.output?.cinemaMovieSessions;
   if (!Array.isArray(sessions)) return responseBody;
 
-  const cinemaRe = responseBody?.output?.cinemaRe || {};
+  const cinemaRe = responseBody?.output?.cinemaRe || sessions[0]?.cinemaRe || responseBody?.output?.cinema || {};
+  const cid = String(cinemaRe.theatreId || cinemaRe.id || payload.cid || '');
+  const coords = normalizeCinemaCoordinates(
+    cinemaRe.latitude || cinemaRe.lat || payload.latitude || payload.lat,
+    cinemaRe.longitude || cinemaRe.lng || payload.longitude || payload.lng
+  );
 
   return {
     cinema: {
-      id: cinemaRe.theatreId,
-      name: cinemaRe.name,
-      address: cinemaRe.address1,
-      city: cinemaRe.cityName
+      id: cid,
+      name: cinemaRe.name || cinemaRe.theatreName || payload.cinemaName || '',
+      address: cinemaRe.address1 || cinemaRe.address || payload.address || '',
+      city: cinemaRe.cityName || cinemaRe.city || payload.city || '',
+      lat: coords.lat,
+      lng: coords.lng,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      coordinates: coords.coordinates
     },
     shows: sessions.flatMap((cs) => {
       const movies = Array.isArray(cs.movieRe) ? cs.movieRe : [cs.movieRe].filter(Boolean);
@@ -744,6 +1265,113 @@ function summarizeOffers(responseBody) {
   };
 }
 
+function summarizeSeatLayout(responseBody, payload = {}) {
+  const output = responseBody?.output || responseBody;
+  const rawRows = output?.rows || [];
+  const rawPriceList = output?.priceList || {};
+  const filmData = output?.filmData || {};
+  const summary = output?.availabilitySummary || {};
+
+  const cleanPriceList = {};
+  const categoriesMap = {};
+
+  if (Array.isArray(rawPriceList)) {
+    rawPriceList.forEach((item) => {
+      const code = item.priceCode || item.code || item.c || item.description || 'Standard';
+      const name = item.description || item.name || code;
+      const price = typeof item.price === 'number' ? item.price : (Number(item.price) || 0);
+      cleanPriceList[code] = { code, name, price };
+      categoriesMap[code] = { name, price, availableSeats: [], totalSeats: 0 };
+    });
+  } else if (typeof rawPriceList === 'object' && rawPriceList !== null) {
+    Object.entries(rawPriceList).forEach(([key, item]) => {
+      if (typeof item === 'object' && item !== null) {
+        const name = item.description || item.name || key;
+        const price = typeof item.price === 'number' ? item.price : (Number(item.price) || 0);
+        cleanPriceList[key] = { code: key, name, price };
+        categoriesMap[key] = { name, price, availableSeats: [], totalSeats: 0 };
+      } else {
+        const price = typeof item === 'number' ? item : (Number(item) || 0);
+        cleanPriceList[key] = { code: key, name: key, price };
+        categoriesMap[key] = { name: key, price, availableSeats: [], totalSeats: 0 };
+      }
+    });
+  }
+
+  const cleanRows = rawRows.map((row) => {
+    if (row?.t === 'area') {
+      const priceCode = row.priceCode || row.c || '';
+      return {
+        t: 'area',
+        n: row.n || '',
+        priceCode,
+        price: cleanPriceList[priceCode]?.price || 0,
+        s: []
+      };
+    }
+
+    const seats = Array.isArray(row?.s)
+      ? row.s.map((st) => {
+          if (!st?.sn || st.s === 0) {
+            return { displaynumber: '', available: false };
+          }
+          const catCode = st.c || st.pc || 'CL-CLASSIC';
+          const isAvail = Boolean(st.available);
+
+          if (!categoriesMap[catCode]) {
+            const label = catCode.includes('-') ? catCode.split('-')[1] : catCode;
+            categoriesMap[catCode] = { name: label, price: cleanPriceList[catCode]?.price || 300, availableSeats: [], totalSeats: 0 };
+          }
+          categoriesMap[catCode].totalSeats += 1;
+          if (isAvail) {
+            categoriesMap[catCode].availableSeats.push(st.sn);
+          }
+
+          return {
+            sn: st.sn,
+            c: catCode,
+            displaynumber: String(st.displaynumber || ''),
+            available: isAvail
+          };
+        })
+      : [];
+
+    return {
+      t: 'seats',
+      n: row.n || '',
+      s: seats
+    };
+  });
+
+  const categories = Object.entries(categoriesMap).map(([code, cat]) => ({
+    code,
+    name: cat.name,
+    price: cat.price,
+    availableCount: cat.availableSeats.length,
+    totalCount: cat.totalSeats,
+    availableSeats: cat.availableSeats
+  }));
+
+  return {
+    cinemaName: output.cinemaName || payload.cinemaName || 'PVR Cinema',
+    cinemaCode: output.cinemaCode || payload.cinemaCode || payload.cid || '',
+    filmName: filmData.filmName || output.filmName || payload.filmName || '',
+    filmId: String(filmData.filmId || output.filmId || payload.filmId || ''),
+    experience: filmData.format || output.experience || payload.experience || 'Standard',
+    language: filmData.language || 'English',
+    certificate: filmData.certificate || 'UA',
+    showId: String(output.showId || payload.showId || ''),
+    showTime: output.showTime || payload.showTime || '',
+    showDateTime: output.showDateTime || `${payload.dated || ''} ${output.showTime || ''}`.trim(),
+    dated: payload.dated || new Date().toISOString().split('T')[0],
+    city: output.city?.name || payload.city || '',
+    availabilitySummary: summary,
+    priceList: cleanPriceList,
+    categories,
+    rows: cleanRows
+  };
+}
+
 // ============================================================
 // GET/POST /api/pvr/cities?city=Delhi&lat=28.6139&lng=77.2090
 // Fetch city list/nearest city from PVR.
@@ -753,7 +1381,7 @@ registerGetPost('/cities', (req, res) => {
   const payload = buildPayload(config.payload, req, buildCoordinateOverrides(req, config.payload, { includeCity: false }));
   const city = getRequestValue(req, 'city', 'CityName');
 
-  return callPvrApi({ req, res, config, payload, city });
+  return callPvrApi({ req, res, config, payload, city, endpoint: 'city' });
 });
 
 // ============================================================
@@ -776,7 +1404,7 @@ registerGetPost('/cinemas', (req, res) => {
   const config = pvrApiUrls.cinemas;
   const payload = buildPayload(config.payload, req, buildCoordinateOverrides(req, config.payload));
 
-  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemas });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemas, endpoint: 'cinemas' });
 });
 
 // ============================================================
@@ -790,7 +1418,7 @@ registerGetPost('/showtimes/cinemas', (req, res) => {
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemaSessions });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeCinemaWiseShowtimes, endpoint: 'cshowtimes' });
 });
 
 // ============================================================
@@ -804,43 +1432,120 @@ registerGetPost('/showtimes/movies', (req, res) => {
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload, transformResponse: summarizeMovieShowtimes });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeMovieShowtimes, endpoint: 'mshowtimes' });
+});
+
+// ============================================================
+// GET/POST /api/pvr/movies?city=Delhi&status=NOW_SHOWING|UPCOMING|ALL
+// Fetch clean list of live movies from PVR.
+// ============================================================
+registerGetPost('/movies', (req, res) => {
+  const config = pvrApiUrls.showtimes.mshowtimes;
+  const payload = buildPayload(config.payload, req, {
+    ...buildCoordinateOverrides(req, config.payload),
+    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
+  });
+
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeLiveMovieList, endpoint: 'mshowtimes' });
+});
+
+// ============================================================
+// GET/POST /api/pvr/nowshowing?city=Delhi
+// Alias for now-showing live movies from PVR.
+// ============================================================
+registerGetPost('/nowshowing', (req, res) => {
+  const config = pvrApiUrls.showtimes.mshowtimes;
+  const payload = buildPayload(config.payload, req, {
+    ...buildCoordinateOverrides(req, config.payload),
+    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
+  });
+
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeLiveMovieList, endpoint: 'mshowtimes' });
 });
 
 // ============================================================
 // GET/POST /api/pvr/cinemas/:cinemaId/sessions?city=Delhi&dated=2026-06-26
 // Fetch sessions for one PVR cinema.
 // ============================================================
-registerGetPost('/cinemas/:cinemaId/sessions', (req, res) => {
+registerGetPost('/cinemas/:cinemaId/sessions', async (req, res) => {
   const config = pvrApiUrls.csessions;
+  const city = getCityFromRequest(req) || 'Delhi';
+  const rawCid = req.params.cinemaId || getCidRequestValue(req, '');
+  let resolvedCid = rawCid;
+  let resolvedCinema = null;
+
+  try {
+    const cinemasPayload = buildPayload(pvrApiUrls.cinemas.payload, req, buildCoordinateOverrides(req, pvrApiUrls.cinemas.payload));
+    const cinemasResponse = await fetchPvrJson(
+      pvrApiUrls.cinemas,
+      cinemasPayload,
+      city,
+      'cinemas',
+      getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
+    );
+    resolvedCinema = findCinemaInCinemaList(cinemasResponse?.output?.c || [], rawCid);
+    if (resolvedCinema && resolvedCinema.theatreId) {
+      resolvedCid = String(resolvedCinema.theatreId);
+    }
+  } catch (e) {}
+
   const payload = buildPayload(config.payload, req, {
     ...buildCoordinateOverrides(req, config.payload),
-    cid: req.params.cinemaId,
+    cid: resolvedCid,
+    cinemaName: resolvedCinema?.name || '',
+    address: resolvedCinema?.address1 || '',
+    latitude: resolvedCinema?.latitude,
+    longitude: resolvedCinema?.longitude,
     dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
   });
 
-  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions });
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions, endpoint: 'csessions' });
 });
 
 // ============================================================
 // GET/POST /api/pvr/sessions?city=Delhi&cid=DL001&dated=2026-06-26
 // Fetch sessions for a cinema when cid is supplied as a query/body field.
 // ============================================================
-registerGetPost('/sessions', (req, res) => {
+registerGetPost('/sessions', async (req, res) => {
   const config = pvrApiUrls.csessions;
-  const payload = buildPayload(config.payload, req, {
-    ...buildCoordinateOverrides(req, config.payload),
-    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
-  });
+  const city = getCityFromRequest(req) || 'Delhi';
+  const rawCid = getCidRequestValue(req, '');
+  let resolvedCid = rawCid;
+  let resolvedCinema = null;
 
-  if (!payload.cid) {
+  try {
+    const cinemasPayload = buildPayload(pvrApiUrls.cinemas.payload, req, buildCoordinateOverrides(req, pvrApiUrls.cinemas.payload));
+    const cinemasResponse = await fetchPvrJson(
+      pvrApiUrls.cinemas,
+      cinemasPayload,
+      city,
+      'cinemas',
+      getRequestValue(req, 'chain', REQUIRED_HEADERS.chain)
+    );
+    resolvedCinema = findCinemaInCinemaList(cinemasResponse?.output?.c || [], rawCid);
+    if (resolvedCinema && resolvedCinema.theatreId) {
+      resolvedCid = String(resolvedCinema.theatreId);
+    }
+  } catch (e) {}
+
+  if (!resolvedCid) {
     return res.status(400).json({
       status: 'error',
       message: 'cid is required'
     });
   }
 
-  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions });
+  const payload = buildPayload(config.payload, req, {
+    ...buildCoordinateOverrides(req, config.payload),
+    cid: resolvedCid,
+    cinemaName: resolvedCinema?.name || '',
+    address: resolvedCinema?.address1 || '',
+    latitude: resolvedCinema?.latitude,
+    longitude: resolvedCinema?.longitude,
+    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', config.payload.dated)))
+  });
+
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeSessions, endpoint: 'csessions' });
 });
 
 // ============================================================
@@ -849,51 +1554,138 @@ registerGetPost('/sessions', (req, res) => {
 // ============================================================
 registerGetPost('/offers', (req, res) => {
   const config = pvrApiUrls.offers;
-  const payload = buildPayload(config.payload, req);
+  const city = getCityFromRequest(req) || 'Mumbai-All';
+  const payload = buildPayload(config.payload, req, { city });
 
-  return callPvrApi({ req, res, config, payload,transformResponse:summarizeOffers});
+  return callPvrApi({ req, res, config, payload, transformResponse: summarizeOffers, endpoint: 'offers' });
 });
 
 // ============================================================
-// GET/POST /api/pvr/seatlayout?city=Delhi&cid=348&dated=2026-06-27
-// Fetch local template seat layout with randomized availability.
+// GET/POST /api/pvr/seatlayout?city=Noida&cid=396&dated=2026-08-24&showId=34070
+// Fetch seat layout strictly matching the requested show and cinema.
 // ============================================================
 registerGetPost('/seatlayout', async (req, res) => {
   const config = pvrApiUrls.seatlayout;
+  const city = getCityFromRequest(req) || 'Delhi';
+  const rawCid = getCidRequestValue(req, '');
+  const dated = normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', new Date().toISOString().split('T')[0])));
+  const requestedShowId = getShowIdRequestValue(req, '');
+  const requestedFilmId = getRequestValue(req, 'filmId', '');
+  const requestedFilmName = getFilmNameRequestValue(req, '');
+  const requestedShowTime = getShowTimeRequestValue(req, '');
+  const requestedExperience = getRequestValue(req, 'experience', getRequestValue(req, 'format', ''));
+
   const payload = buildPayload(config.payload, req, {
-    ...buildCoordinateOverrides(req, { city: getRequestValue(req, 'city', 'Delhi') }),
-    cid: getRequestValue(req, 'cid', getRequestValue(req, 'cinemaCode', '000')),
-    cinemaCode: getRequestValue(req, 'cinemaCode', getRequestValue(req, 'cid', '000')),
-    cinemaName: getRequestValue(req, 'cinemaName', getRequestValue(req, 'cinema', 'PVR Demo Cinema')),
-    dated: normalizeDate(getRequestValue(req, 'dated', getRequestValue(req, 'date', new Date().toISOString().split('T')[0]))),
-    filmId: getRequestValue(req, 'filmId', '35277'),
-    filmName: getRequestValue(req, 'filmName', 'SUPERGIRL'),
-    showId: getRequestValue(req, 'showId', '35002'),
-    showTime: getRequestValue(req, 'showTime', ''),
+    ...buildCoordinateOverrides(req, { city }),
+    city,
+    cid: rawCid,
+    cinemaCode: rawCid,
+    cinemaName: getRequestValue(req, 'cinemaName', rawCid),
+    dated,
+    filmId: requestedFilmId,
+    filmName: requestedFilmName,
+    showId: requestedShowId,
+    sessionId: requestedShowId,
+    showTime: requestedShowTime,
+    experience: requestedExperience,
     seed: getRequestValue(req, 'seed', '')
   });
 
+  console.log(`[SeatLayout] Incoming Request -> city="${city}", cid="${rawCid}", dated="${dated}", showId="${requestedShowId}", filmName="${requestedFilmName}", showTime="${requestedShowTime}"`);
+
+  // If request contains neither showId nor film/showTime, return 400 Bad Request
+  if (!requestedShowId && !requestedFilmId && !requestedFilmName && !requestedShowTime) {
+    console.warn(`[SeatLayout] MISSING IDENTIFIER -> neither showId nor film/time was provided`);
+    return res.status(400).json({
+      status: 'bad_request',
+      message: 'A valid showId, sessionId, or movie name/time is required to retrieve seat layout',
+      requested: {
+        city,
+        cid: rawCid,
+        dated,
+        showId: requestedShowId
+      }
+    });
+  }
+
   try {
     const enrichedPayload = await enrichSeatLayoutPayload(req, payload);
-    const data = randomizeSeatLayoutAvailability(createSeatLayoutTemplate(enrichedPayload), enrichedPayload);
+
+    // If a requested show could not be found:
+    if (!enrichedPayload) {
+      console.warn(`[SeatLayout] NOT FOUND -> requested showId="${requestedShowId}", cid="${rawCid}", city="${city}", dated="${dated}"`);
+      return res.status(404).json({
+        status: 'not_found',
+        message: 'Seat layout is not available for the requested show',
+        requested: {
+          city,
+          cid: rawCid,
+          dated,
+          showId: requestedShowId
+        }
+      });
+    }
+
+    const rawData = randomizeSeatLayoutAvailability(createSeatLayoutTemplate(enrichedPayload), enrichedPayload);
+    const data = summarizeSeatLayout(rawData, enrichedPayload);
+    const source = 'pvr-metadata-seats';
+
+    // Mandatory Final Pre-Return Dual Validation
+    const requested = requestedShowId ? String(requestedShowId).trim() : '';
+    const payloadShowId = String(enrichedPayload?.showId ?? enrichedPayload?.sessionId ?? '').trim();
+    const dataShowId = String(data?.showId ?? data?.sessionId ?? '').trim();
+
+    if (requested) {
+      if (payloadShowId !== requested || dataShowId !== requested) {
+        console.error("[SeatLayout] FINAL RESPONSE MISMATCH", {
+          requestedShowId: requested,
+          payloadShowId,
+          dataShowId,
+          cid: rawCid,
+          payloadMovie: enrichedPayload?.filmName,
+          dataMovie: data?.filmName
+        });
+
+        return res.status(409).json({
+          status: "mismatch",
+          message: "Seat layout response does not match the requested show",
+          requested: {
+            city,
+            cid: rawCid,
+            dated,
+            showId: requestedShowId
+          },
+          resolved: {
+            payloadShowId,
+            dataShowId,
+            filmName: data?.filmName,
+            showTime: data?.showTime
+          }
+        });
+      }
+    }
+
+    console.log(`[SeatLayout] SUCCESS -> resolved showId="${data.showId}", cinema="${data.cinemaName}" (ID: ${data.cinemaCode}), movie="${data.filmName}", date="${data.dated}", time="${data.showTime}", source="${source}"`);
 
     return res.json({
       status: 'success',
-      source: enrichedPayload === payload ? 'local-template' : 'pvr-metadata-local-seats',
+      source,
       upstreamUrl: null,
       payload: enrichedPayload,
       data
     });
   } catch (error) {
-    const data = randomizeSeatLayoutAvailability(createSeatLayoutTemplate(payload), payload);
-
-    return res.json({
-      status: 'success',
-      source: 'local-template',
-      upstreamUrl: null,
-      payload,
-      metadataWarning: error.message,
-      data
+    console.error(`[SeatLayout] EXCEPTION -> ${error.message}`, error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve seat layout for the requested show',
+      error: error.message,
+      requested: {
+        city,
+        cid: rawCid,
+        dated,
+        showId: requestedShowId
+      }
     });
   }
 });

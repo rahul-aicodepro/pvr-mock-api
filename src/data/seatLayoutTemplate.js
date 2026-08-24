@@ -62,8 +62,10 @@ function areaRow(name, priceCode) {
 
   return {
     segments: null,
-    n: `${name} (${price.price})`,
-    nn: `${name} (${price.netPerTkt} + GST)`,
+    n: `${name} (${price?.price || 0})`,
+    priceCode,
+    price: price ? Number(price.price) : 0,
+    nn: price ? `${name} (${price.netPerTkt} + GST)` : name,
     s: [],
     t: 'area'
   };
@@ -147,14 +149,14 @@ function buildRows() {
 
 function createSeatLayoutTemplate(overrides = {}) {
   const dated = overrides.dated || new Date().toISOString().split('T')[0];
-  const city = overrides.city || 'Delhi';
-  const cinemaName = overrides.cinemaName || 'PVR Demo Cinema';
-  const cinemaCode = String(overrides.cinemaCode || overrides.cid || '000');
-  const filmName = overrides.filmName || 'SUPERGIRL';
-  const filmId = String(overrides.filmId || '35277');
-  const showId = Number(overrides.showId || 35002);
-  const showTime = overrides.showTime || `${dated} 19:30:00`;
-  const runningTime = overrides.runningTime || 110;
+  const city = overrides.city || overrides.cityName || '';
+  const cinemaName = overrides.cinemaName || 'PVR Cinema';
+  const cinemaCode = String(overrides.cinemaCode || overrides.cid || '');
+  const filmName = overrides.filmName || '';
+  const filmId = String(overrides.filmId || '');
+  const showId = overrides.showId ? Number(overrides.showId) : (overrides.sessionId ? Number(overrides.sessionId) : 0);
+  const showTime = overrides.showTime || '';
+  const runningTime = overrides.runningTime || 120;
 
   return {
     status: 200,
@@ -200,17 +202,17 @@ function createSeatLayoutTemplate(overrides = {}) {
       shows: [],
       vakaao: false,
       city: {
-        id: Number(overrides.cityId || 47),
+        id: Number(overrides.cityId || 0),
         name: city,
-        region: overrides.region || 'NORTH',
+        region: overrides.region || '',
         hasSubCities: false,
         vakaoo: false,
-        state: overrides.state || 'DELHI',
+        state: overrides.state || city || '',
         formats: '',
-        cinemaCount: Number(overrides.cinemaCount || 27),
+        cinemaCount: Number(overrides.cinemaCount || 0),
         subcities: [],
-        lat: String(overrides.lat || '28.6139'),
-        lng: String(overrides.lng || '77.2090'),
+        lat: String(overrides.lat || ''),
+        lng: String(overrides.lng || ''),
         image: '',
         imageR: ''
       },

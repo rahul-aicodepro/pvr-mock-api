@@ -14,9 +14,22 @@ function getDateString(daysFromNow = 0) {
   return d.toISOString().split('T')[0];
 }
 
+// Helper: get city from query, body, or headers
+function getCityFromRequest(req) {
+  return (
+    req.query?.city ||
+    req.body?.city ||
+    req.headers?.city ||
+    req.headers?.['x-city'] ||
+    req.headers?.['x-location'] ||
+    req.headers?.location ||
+    ''
+  );
+}
+
 // Helper: validate city
 function resolveCity(cityParam) {
-  const key = cityParam?.toLowerCase();
+  const key = cityParam?.toLowerCase()?.trim();
   return CITIES[key] || null;
 }
 
@@ -51,8 +64,8 @@ router.get('/cities', (req, res) => {
 // List cinemas in a city
 // ============================================================
 router.get('/cinemas', (req, res) => {
-  const { city } = req.query;
-  if (!city) return res.status(400).json({ status: "error", message: "city query param required" });
+  const city = getCityFromRequest(req);
+  if (!city) return res.status(400).json({ status: "error", message: "city query param or header required" });
 
   const cityData = resolveCity(city);
   if (!cityData) return res.status(404).json({ status: "error", message: `City '${city}' not found. Available: delhi, mumbai, bangalore, chennai, hyderabad, pune` });
@@ -110,7 +123,8 @@ router.get('/movies', (req, res) => {
 // Get all shows for a movie in a city on a date
 // ============================================================
 router.get('/shows', (req, res) => {
-  const { movieId, city, date } = req.query;
+  const city = getCityFromRequest(req);
+  const { movieId, date } = req.query;
 
   if (!movieId) return res.status(400).json({ status: "error", message: "movieId is required" });
   if (!city)    return res.status(400).json({ status: "error", message: "city is required" });
@@ -182,17 +196,31 @@ router.get('/shows', (req, res) => {
 router.get('/shows/:showId/seats', (req, res) => {
   const { showId } = req.params;
 
-  // Parse showId: movieId-cinemaId-date-format-time
-  const parts = showId.split('-');
-  if (parts.length < 4) {
-    return res.status(400).json({ status: "error", message: "Invalid showId format" });
-  }
+  // Parse showId: movieId-cinemaId-YYYY-MM-DD-format-time (e.g. 36850-DL001-2026-06-23-IMAX-10:00AM)
+  const regex = /^([A-Za-z0-9]+)-([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})-([A-Za-z0-9_]+)-(.+)$/;
+  const match = showId.match(regex);
 
-  const movieId = parts[0];
-  const cinemaId = parts[1];
-  const date = parts[2];
-  const format = parts[3];
-  const showTime = parts.slice(4).join(' ');
+  let movieId, cinemaId, date, format, showTime;
+
+  if (match) {
+    [, movieId, cinemaId, date, format, showTime] = match;
+  } else {
+    const parts = showId.split('-');
+    if (parts.length < 4) {
+      return res.status(400).json({ status: "error", message: "Invalid showId format" });
+    }
+    movieId = parts[0];
+    cinemaId = parts[1];
+    if (parts.length >= 6 && /^\d{4}$/.test(parts[2]) && /^\d{2}$/.test(parts[3]) && /^\d{2}$/.test(parts[4])) {
+      date = `${parts[2]}-${parts[3]}-${parts[4]}`;
+      format = parts[5];
+      showTime = parts.slice(6).join('-');
+    } else {
+      date = parts[2];
+      format = parts[3];
+      showTime = parts.slice(4).join('-');
+    }
+  }
 
   const movie = resolveMovie(movieId);
   if (!movie) return res.status(404).json({ status: "error", message: "Movie not found" });
@@ -252,7 +280,8 @@ router.get('/shows/:showId/seats', (req, res) => {
 // Perfect for chatbot responses
 // ============================================================
 router.get('/availability/quick', (req, res) => {
-  const { movieId, city, date } = req.query;
+  const city = getCityFromRequest(req);
+  const { movieId, date } = req.query;
 
   if (!movieId || !city) {
     return res.status(400).json({ status: "error", message: "movieId and city are required" });
@@ -308,7 +337,8 @@ router.get('/availability/quick', (req, res) => {
 // All IMAX (or any format) shows for a movie in a city
 // ============================================================
 router.get('/availability/format', (req, res) => {
-  const { movieId, city, format, date } = req.query;
+  const city = getCityFromRequest(req);
+  const { movieId, format, date } = req.query;
 
   if (!movieId || !city || !format) {
     return res.status(400).json({ status: "error", message: "movieId, city, and format are required" });
@@ -364,7 +394,7 @@ router.get('/availability/format', (req, res) => {
 // All now showing movies with quick availability
 // ============================================================
 router.get('/nowshowing', (req, res) => {
-  const { city } = req.query;
+  const city = getCityFromRequest(req);
   if (!city) return res.status(400).json({ status: "error", message: "city is required" });
 
   const cityData = resolveCity(city);

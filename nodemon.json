@@ -1,0 +1,19 @@
+{
+  "watch": [
+    "src/",
+    "libs/",
+    "request-db.config.js"
+  ],
+  "ignore": [
+    "request-db/**",
+    "request-db/*",
+    "logs/**",
+    "logs/*",
+    "node_modules/**",
+    "*.tmp",
+    "*.log",
+    "stats.json"
+  ],
+  "ext": "js,json",
+  "exec": "node src/index.js"
+}

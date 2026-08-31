@@ -21,6 +21,27 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
+
+// Middleware to parse request bodies on GET requests sent by agent/tool frameworks
+app.use((req, res, next) => {
+  if (req.method === 'GET' && (!req.body || Object.keys(req.body).length === 0)) {
+    let data = '';
+    req.on('data', chunk => {
+      data += chunk;
+    });
+    req.on('end', () => {
+      if (data && data.trim()) {
+        try {
+          req.body = JSON.parse(data);
+        } catch (e) {}
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+});
+
 app.use(morgan('dev'));
 
 // ── Routes ───────────────────────────────────────────────────
@@ -47,11 +68,13 @@ app.get('/', (req, res) => {
       pvrCities:          "GET /api/pvr/cities?city=Delhi&lat=28.6139&lng=77.2090",
       pvrCityList:        "GET /api/pvr/city-list",
       pvrCinemas:         "GET /api/pvr/cinemas?city=Delhi",
-      pvrCinemaShowtimes: "GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-06-26",
-      pvrMovieShowtimes:  "GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-06-26",
-      pvrCinemaSessions:  "GET /api/pvr/cinemas/:cinemaId/sessions?city=Delhi&dated=2026-06-26",
+      pvrMovies:          "GET /api/pvr/movies?city=Delhi&status=NOW_SHOWING",
+      pvrNowShowing:      "GET /api/pvr/nowshowing?city=Delhi",
+      pvrCinemaShowtimes: "GET /api/pvr/showtimes/cinemas?city=Delhi&dated=2026-08-21",
+      pvrMovieShowtimes:  "GET /api/pvr/showtimes/movies?city=Delhi&dated=2026-08-21",
+      pvrCinemaSessions:  "GET /api/pvr/cinemas/:cinemaId/sessions?city=Delhi&dated=2026-08-21",
       pvrOffers:          "GET /api/pvr/offers?city=Mumbai-All&id=0&payment=false",
-      pvrSeatLayout:      "GET /api/pvr/seatlayout?city=Delhi&cid=348&dated=2026-06-27"
+      pvrSeatLayout:      "GET /api/pvr/seatlayout?city=Delhi&cid=348&dated=2026-08-21&showId=35002"
     },
     availableCities: ["delhi", "mumbai", "bangalore", "chennai", "hyderabad", "pune"],
     sampleMovieIds: {
